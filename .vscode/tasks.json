@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "codeviz: serve current file",
+      "type": "shell",
+      "command": "python3",
+      "args": ["${workspaceFolder}/codeviz.py", "${file}", "--serve", "--port", "8930"],
+      "isBackground": true,
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}
