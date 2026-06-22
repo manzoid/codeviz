@@ -35,17 +35,30 @@ function placeholder(msg) {
   return `<!DOCTYPE html><body style="font:14px -apple-system,sans-serif;color:#444;padding:24px">${msg}</body>`;
 }
 
-// Run codeviz <file> -o <tmp.html>, return the HTML string.
+// Run codeviz on `file`, returning the generated HTML. Uses the `codeviz`
+// command on PATH by default; if codeviz.scriptPath is set, runs that with
+// codeviz.pythonPath instead.
 function runCodeviz(file) {
   return new Promise((resolve, reject) => {
     const out = path.join(os.tmpdir(), "codeviz-vscode-view.html");
-    const py = cfg().get("pythonPath") || "python3";
     const script = cfg().get("scriptPath");
-    if (!script || !fs.existsSync(script)) {
-      return reject(new Error(`codeviz.py not found at "${script}". Set codeviz.scriptPath in Settings.`));
+    let cmd, args;
+    if (script) {
+      cmd = cfg().get("pythonPath") || "python3";
+      args = [script, file, "-o", out];
+    } else {
+      cmd = cfg().get("command") || "codeviz";
+      args = [file, "-o", out];
     }
-    cp.execFile(py, [script, file, "-o", out], { timeout: 120000 }, (err, _stdout, stderr) => {
-      if (err) return reject(new Error((stderr || err.message || "").trim()));
+    cp.execFile(cmd, args, { timeout: 120000 }, (err, _stdout, stderr) => {
+      if (err) {
+        if (err.code === "ENOENT") {
+          return reject(new Error(
+            `'${cmd}' not found on PATH. Install codeviz (run ./install.sh in the repo) ` +
+            `or set codeviz.scriptPath to your codeviz.py.`));
+        }
+        return reject(new Error((stderr || err.message || "").trim()));
+      }
       fs.readFile(out, "utf8", (e, html) => (e ? reject(e) : resolve(html)));
     });
   });

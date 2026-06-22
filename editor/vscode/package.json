@@ -2,7 +2,7 @@
   "name": "codeviz",
   "displayName": "codeviz",
   "description": "Step-through execution visualization for the current file — Python, JS/TS, C/C++, Java, x86-64 asm.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "manzoid",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/manzoid/codeviz" },
@@ -21,14 +21,17 @@
     "configuration": {
       "title": "codeviz",
       "properties": {
-        "codeviz.pythonPath": {
-          "type": "string", "default": "python3",
-          "description": "Python interpreter used to run codeviz."
+        "codeviz.command": {
+          "type": "string", "default": "codeviz",
+          "description": "The codeviz command (on PATH after install). Used unless codeviz.scriptPath is set."
         },
         "codeviz.scriptPath": {
-          "type": "string",
-          "default": "/Users/manzoid/code/src/github.com/manzoid/codeviz/codeviz.py",
-          "description": "Absolute path to codeviz.py."
+          "type": "string", "default": "",
+          "description": "Optional: absolute path to codeviz.py, run with codeviz.pythonPath. Overrides codeviz.command when set."
+        },
+        "codeviz.pythonPath": {
+          "type": "string", "default": "python3",
+          "description": "Python interpreter used when codeviz.scriptPath is set."
         },
         "codeviz.autoFollow": {
           "type": "boolean", "default": true,

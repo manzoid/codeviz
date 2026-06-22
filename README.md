@@ -6,14 +6,34 @@ single self-contained HTML page with a code highlight, stack frames, heap
 objects, and reference arrows (and a dedicated registers/flags/stack view for
 assembly). No internet at runtime; no cloud.
 
+## Install
+
 ```bash
-python3 codeviz.py examples/demo.py --open        # Python
-python3 codeviz.py examples/demo.js --open        # JavaScript
-python3 codeviz.py examples/demo.ts --open        # TypeScript (needs `npm i -g typescript`)
-python3 codeviz.py examples/count_down.s --open   # x86-64 assembly (Docker)
-python3 codeviz.py langs                           # what's supported / ready
-python3 codeviz.py doctor                          # audit env + per-language fixes
+git clone https://github.com/manzoid/codeviz
+cd codeviz
+./install.sh
 ```
+
+`install.sh` installs the `codeviz` command, the JS/TS tracer deps, and the VS
+Code extension (and is safe to re-run). **Prerequisites:** Python 3.9+ (required);
+**Node 18+** for JavaScript/TypeScript and **Docker** for C/C++/Java/asm are
+optional — those languages activate only when present. Run `codeviz doctor`
+anytime to see what's ready and how to enable the rest.
+
+In VS Code: **Cmd+Alt+V** on a file opens the visualization beside your editor
+(it follows the active file and re-traces on save).
+
+## Quick start
+
+```bash
+codeviz examples/demo.py --open        # Python
+codeviz examples/demo.ts --open        # TypeScript
+codeviz examples/count_down.s --open   # x86-64 assembly (Docker)
+codeviz langs                           # what's supported / ready
+codeviz doctor                          # audit env + per-language fixes
+```
+
+(No install? `python3 codeviz.py <file>` works the same from the repo.)
 
 ## How it works
 

@@ -7,3 +7,6 @@ tracers/js/node_modules/
 .DS_Store
 *.vsix
 editor/vscode/LICENSE
+*.egg-info/
+build/
+dist/

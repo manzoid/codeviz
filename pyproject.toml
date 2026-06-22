@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codeviz"
+version = "0.1.0"
+description = "Local, multi-language Python Tutor-style execution visualizer (Python, JS/TS, C/C++, Java, x86-64 asm)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "manzoid" }]
+keywords = ["visualization", "education", "debugger", "python-tutor", "assembly"]
+# No third-party Python dependencies — the CLI is pure standard library.
+# (Node is needed for JS/TS, Docker for C/C++/Java/asm; see `codeviz doctor`.)
+dependencies = []
+
+[project.scripts]
+codeviz = "codeviz.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/manzoid/codeviz"
+
+# Package only the importable Python package. The runtime data files
+# (viewer_template.html, vendor/, tracers/, docker/) live at the repo root and
+# are resolved relative to it — install editable (`pip install -e .`) so they
+# are found. The top-level codeviz.py dev shim is intentionally NOT packaged
+# (it would clash with the `codeviz` package name).
+[tool.setuptools]
+packages = ["codeviz", "codeviz.backends"]
+py-modules = []
