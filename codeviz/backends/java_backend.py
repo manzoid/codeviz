@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 
 from . import _docker
-from .base import Availability, Backend
+from .base import Availability, Backend, Execution
 
 IMAGE = "pgbovine/cokapi-java:v1"
 _RUNNER = "/tmp/run-java-backend.sh"
@@ -28,6 +28,7 @@ class JavaBackend(Backend):
     label = "Java"
     extensions = (".java",)
     requires_docker = True
+    execution = Execution.CONTAINER
 
     def check(self) -> Availability:
         return _docker.check_docker(IMAGE, "codeviz setup java")

@@ -6,7 +6,7 @@ Nothing else in the codebase needs to change.
 """
 from __future__ import annotations
 
-from .base import Availability, Backend
+from .base import Availability, Backend, Execution
 from .c_cpp_backend import CBackend, CppBackend
 from .java_backend import JavaBackend
 from .javascript_backend import JavaScriptBackend, TypeScriptBackend
@@ -47,6 +47,7 @@ def supported_extensions() -> list[str]:
 __all__ = [
     "Availability",
     "Backend",
+    "Execution",
     "all_backends",
     "for_extension",
     "for_file",

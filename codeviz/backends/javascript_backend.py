@@ -15,7 +15,7 @@ import os
 import shutil
 import subprocess
 
-from .base import Availability, Backend
+from .base import Availability, Backend, Execution
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _TRACER = os.path.join(_ROOT, "tracers", "js", "trace.js")
@@ -25,6 +25,7 @@ class JavaScriptBackend(Backend):
     name = "javascript"
     label = "JavaScript"
     extensions = (".js", ".mjs")
+    execution = Execution.LOCAL
 
     def check(self) -> Availability:
         node = shutil.which("node")
@@ -56,6 +57,7 @@ class TypeScriptBackend(JavaScriptBackend):
     name = "typescript"
     label = "TypeScript"
     extensions = (".ts",)
+    execution = Execution.TRANSPILE
 
     def check(self) -> Availability:
         base = super().check()

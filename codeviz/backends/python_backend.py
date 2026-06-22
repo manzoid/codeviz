@@ -6,7 +6,7 @@ import io
 import os
 import sys
 
-from .base import Backend
+from .base import Backend, Execution
 
 _VENDOR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "vendor")
 
@@ -15,6 +15,7 @@ class PythonBackend(Backend):
     name = "python"
     label = "Python"
     extensions = (".py",)
+    execution = Execution.LOCAL
 
     def trace(self, code: str, filename: str) -> dict:
         if _VENDOR not in sys.path:

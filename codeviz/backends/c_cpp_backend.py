@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 
 from . import _docker
-from .base import Availability, Backend
+from .base import Availability, Backend, Execution
 
 IMAGE = "pgbovine/opt-cpp-backend:v1"
 _RUNNER = "/tmp/opt-cpp-backend/run_cpp_backend.py"
@@ -20,6 +20,7 @@ _RUNNER = "/tmp/opt-cpp-backend/run_cpp_backend.py"
 
 class _CFamilyBackend(Backend):
     requires_docker = True
+    execution = Execution.CONTAINER
     lang = "c"  # or "cpp"
 
     def check(self) -> Availability:

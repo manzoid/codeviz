@@ -17,6 +17,32 @@ class Availability(NamedTuple):
     reason: str = ""  # human-readable explanation when ok is False
 
 
+class Execution:
+    """The (locked) set of execution models a backend may use.
+
+    A language picks exactly ONE of these — there is no host auto-detection or
+    fallback between models.  See ARCHITECTURE.md for the rationale.
+
+    * ``LOCAL``      — runs on the host runtime.  Reserved for languages whose
+      runtime is near-universal AND exposes a rock-solid tracing API
+      (Python: ``sys.settrace`` via the vendored pg_logger; JavaScript: the
+      V8 Inspector Protocol).
+    * ``CONTAINER``  — runs inside a codeviz-provided, version-pinned Docker
+      image (C, C++, Java today; future Ruby/Dart/Go).  Guarantees a known
+      toolchain regardless of what the host has installed.
+    * ``TRANSPILE``  — has no runtime of its own: compile with a pinned
+      compiler and hand the output to an existing backend's target
+      (TypeScript -> JavaScript).
+    """
+
+    LOCAL = "local"
+    CONTAINER = "container"
+    TRANSPILE = "transpile"
+
+    #: all valid values, for validation / iteration
+    ALL = ("local", "container", "transpile")
+
+
 class Backend(abc.ABC):
     """Base class for a language backend.
 
@@ -34,6 +60,9 @@ class Backend(abc.ABC):
     label: str = ""
     #: whether this backend shells out to Docker (affects setup + messaging)
     requires_docker: bool = False
+    #: which execution model this backend uses (one of ``Execution.ALL``).
+    #: LOCKED per-language — see ARCHITECTURE.md.  Default "local".
+    execution: str = Execution.LOCAL
 
     def check(self) -> Availability:
         """Report whether this backend can run right now.
