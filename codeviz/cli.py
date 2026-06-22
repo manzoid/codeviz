@@ -122,10 +122,17 @@ def _cmd_install_extension(args) -> int:
     return rc
 
 
-def _output_path(args, default_base: str) -> str:
+def _output_path(args, source) -> str:
+    """Where to write the HTML. With -o, exactly there. Otherwise a temp dir
+    (so codeviz never litters your source folders); the path is printed, and
+    --open opens it from there."""
     if args.out:
         return args.out
-    return default_base + ".viz.html"
+    import tempfile
+    name = os.path.splitext(os.path.basename(source))[0] or "codeviz"
+    out_dir = os.path.join(tempfile.gettempdir(), "codeviz")
+    os.makedirs(out_dir, exist_ok=True)
+    return os.path.join(out_dir, name + ".viz.html")
 
 
 def _cmd_default(args) -> int:
@@ -146,7 +153,7 @@ def _cmd_default(args) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 1
         html = render_html(data, "snippet", backend.name)
-        out = _output_path(args, os.path.join(os.getcwd(), "snippet"))
+        out = _output_path(args, "snippet")
         with open(out, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"wrote {out}  ({len(data.get('trace', []))} steps, {backend.label})")
@@ -163,7 +170,7 @@ def _cmd_default(args) -> int:
     except (UnsupportedLanguage, RuntimeError, FileNotFoundError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    out = _output_path(args, os.path.splitext(args.file)[0])
+    out = _output_path(args, args.file)
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"wrote {out}  ({n} steps, {lang})")
@@ -185,7 +192,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--code", help="inline source instead of a file")
     p.add_argument("--lang", default=".py",
                    help="language extension for --code (default .py), e.g. .js .ts .c")
-    p.add_argument("-o", "--out", help="output HTML path")
+    p.add_argument("-o", "--out", help="output HTML path (default: a temp dir, not next to your source)")
     p.add_argument("--open", action="store_true", help="open the result when done")
     p.add_argument("--serve", action="store_true",
                    help="live-reload server: re-trace on save (requires FILE)")
