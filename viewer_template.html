@@ -63,6 +63,7 @@
   #arrows { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
   .objects-host { position: relative; }
   .empty { color: #9ca3af; font-style: italic; }
+  .kbd-hint { color: #b0b4ba; font-size: 11px; white-space: nowrap; }
   /* --- assembly view --- */
   .asm-sec { margin-bottom: 16px; }
   .asm-sec h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
@@ -91,13 +92,14 @@
   <span class="title">codeviz</span>
   <span class="caption" id="caption"></span>
   <div class="controls">
-    <button id="first">⏮</button>
-    <button id="prev">◀ Prev</button>
+    <button id="first" title="First step (Home / g)">⏮</button>
+    <button id="prev" title="Previous step (← / h / k)">◀ Prev</button>
     <input type="range" id="slider" min="0" value="0">
-    <button id="next">Next ▶</button>
-    <button id="last">⏭</button>
+    <button id="next" title="Next step (→ / l / j / Space)">Next ▶</button>
+    <button id="last" title="Last step (End / G)">⏭</button>
     <button id="run" title="Jump to the end (run to completion)">Run ⏩</button>
     <span id="counter" style="font-variant-numeric: tabular-nums; min-width: 90px; text-align: right;"></span>
+    <span class="kbd-hint">← → step</span>
   </div>
 </header>
 <div class="wrap">
@@ -368,10 +370,12 @@ document.getElementById("last").onclick  = () => go(trace.length - 1);
 document.getElementById("run").onclick   = () => go(trace.length - 1);
 slider.oninput = e => go(+e.target.value);
 document.addEventListener("keydown", e => {
-  if (e.key === "ArrowLeft"){ go(cur - 1); e.preventDefault(); }
-  if (e.key === "ArrowRight"){ go(cur + 1); e.preventDefault(); }
-  if (e.key === "Home"){ go(0); }
-  if (e.key === "End"){ go(trace.length - 1); }
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  const k = e.key;
+  if (k === "ArrowLeft"  || k === "h" || k === "k" || k === "b"){ go(cur - 1); e.preventDefault(); }
+  else if (k === "ArrowRight" || k === "l" || k === "j" || k === "n" || k === " "){ go(cur + 1); e.preventDefault(); }
+  else if (k === "Home" || k === "g"){ go(0); e.preventDefault(); }
+  else if (k === "End"  || k === "G"){ go(trace.length - 1); e.preventDefault(); }
 });
 window.addEventListener("resize", () => requestAnimationFrame(drawArrows));
 draw();
