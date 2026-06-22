@@ -75,10 +75,13 @@ Assembly is the one place x86-64 is emulated (the subject matter requires it),
 but only the *traced program* runs under qemu-user — the container itself is
 native, and qemu's gdb stub provides stepping without ptrace.
 
-**Release-time TODO** (not needed for local/solo use): publish multi-arch images
-to GHCR and switch container backends to *pull-first, build-fallback*, and pin
-apt package versions, so other users get identical, fast, reliable images
-without a local build.
+**Image distribution:** container backends are *pull-first, build-fallback* —
+they pull a prebuilt multi-arch image from GHCR
+(`ghcr.io/manzoid/codeviz-*`), built by `.github/workflows/images.yml`, and
+fall back to a local `docker build` if a pull isn't available. Remaining
+release polish: set the GHCR packages **public** (one-time) so pulls need no
+login, and pin apt package versions in the Dockerfiles for byte-identical
+reproducibility.
 
 ### 3. Transpiled-to-a-target — `Execution.TRANSPILE`
 

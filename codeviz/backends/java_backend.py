@@ -22,12 +22,12 @@ import base64
 import json
 import os
 import subprocess
-import sys
 
 from . import _docker
 from .base import Availability, Backend, Execution
 
 IMAGE = "codeviz/java:1"
+GHCR = "ghcr.io/manzoid/codeviz-java:1"
 
 # Build context: docker/java at the repo root.
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -57,26 +57,14 @@ class JavaBackend(Backend):
         if info.returncode != 0:
             return ("unavailable", "Docker daemon not running — start Docker Desktop.")
         if not _docker.image_exists(IMAGE):
-            return ("build", f"first run builds {IMAGE} (~2 min); pre-build: codeviz setup java")
+            return ("build", "first run fetches the image (or builds it); pre-fetch: codeviz setup java")
         return ("ready", "")
 
-    def _ensure_image(self) -> None:
-        """Build ``codeviz/java:1`` from docker/java if it isn't present.
+    def ensure_image(self) -> None:
+        """Pull the prebuilt image from GHCR if possible, else build locally."""
+        _docker.ensure_image(IMAGE, GHCR, _BUILD_CONTEXT, "Java")
 
-        Built for the host's native architecture — no ``--platform`` override,
-        so Apple Silicon gets a native arm64 image.  Streams progress to stderr
-        with a heads-up so the one-time build never looks like a hang.
-        """
-        if _docker.image_exists(IMAGE):
-            return
-        docker = _docker.docker_path()
-        print(f"codeviz: building {IMAGE} (one-time, ~2 min) — first use of Java ...",
-              file=sys.stderr, flush=True)
-        proc = subprocess.run([docker, "build", "-t", IMAGE, _BUILD_CONTEXT],
-                              stdout=sys.stderr, timeout=1200)
-        if proc.returncode != 0:
-            raise RuntimeError(f"failed to build {IMAGE} (see docker output above)")
-        print(f"codeviz: built {IMAGE}.", file=sys.stderr, flush=True)
+    _ensure_image = ensure_image  # backward-compatible alias
 
     def trace(self, code: str, filename: str) -> dict:
         self._ensure_image()

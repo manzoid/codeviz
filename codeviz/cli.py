@@ -76,39 +76,30 @@ def _cmd_doctor(args) -> int:
 
 
 def _cmd_setup(args) -> int:
-    """Build the Docker image for a heavyweight backend.
+    """Pre-fetch a container backend's image (pull from GHCR, else build).
 
-    These are OUR OWN modern, self-contained images, vendored as build contexts
-    under ``docker/`` in this repo and built for the host's native architecture
-    (no ``--platform`` override, so Apple Silicon gets native arm64):
-
-      * C / C++ — ``codeviz/c-cpp:1`` (FROM ubuntu:24.04, GDB Python-API tracer)
-      * Java    — ``codeviz/java:1``  (FROM eclipse-temurin:17-jdk, JDI tracer)
-
-    Backends also build their image lazily on first ``trace()`` if missing, so
-    ``setup`` is just an explicit, eager pre-build.
+    Backends do this lazily on first trace() too, so `setup` is just an eager,
+    explicit fetch — handy before a class/demo so the first trace is instant.
     """
-    import subprocess
-    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # (image tag, build context under docker/)
-    targets = {
-        "c": ("codeviz/c-cpp:1", os.path.join(_root, "docker", "c_cpp")),
-        "cpp": ("codeviz/c-cpp:1", os.path.join(_root, "docker", "c_cpp")),
-        "java": ("codeviz/java:1", os.path.join(_root, "docker", "java")),
-        "asm": ("codeviz/asm-x86:1", os.path.join(_root, "docker", "asm")),
-    }
-    if args.lang not in targets:
-        print(f"setup target must be one of: {', '.join(sorted(targets))}", file=sys.stderr)
+    valid = {"c", "cpp", "java", "asm"}
+    if args.lang not in valid:
+        print(f"setup target must be one of: {', '.join(sorted(valid))}", file=sys.stderr)
         return 2
-    tag, ctx = targets[args.lang]
-
-    if not os.path.isdir(ctx):
-        print(f"build context not found: {ctx}", file=sys.stderr)
+    backend = next((b for b in backends.all_backends() if b.name == args.lang), None)
+    if backend is None or not hasattr(backend, "ensure_image"):
+        print(f"no container backend named '{args.lang}'", file=sys.stderr)
         return 1
-    cmd = ["docker", "build", "-t", tag, ctx]
-    print("running:", " ".join(cmd))
-    print(f"(building our own native image {tag} — no amd64 emulation)")
-    return subprocess.call(cmd)
+    avail = backend.check()
+    if not avail.ok:
+        print(f"error: {avail.reason}", file=sys.stderr)
+        return 1
+    try:
+        backend.ensure_image()
+    except Exception as e:
+        print(f"setup failed: {e}", file=sys.stderr)
+        return 1
+    print(f"{backend.label} image ready.")
+    return 0
 
 
 def _output_path(args, default_base: str) -> str:

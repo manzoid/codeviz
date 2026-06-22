@@ -56,8 +56,10 @@ Java, and assembly run in **our own** modern, self-contained Docker images (no
 OPT legacy Valgrind / java_jail). The C/C++ and Java images are native arm64;
 the assembly image is native too — it cross-assembles the x86-64 program and
 runs *just that* under qemu-user's gdb stub (so x86-64 is faithfully emulated
-without emulating the whole container, and without ptrace). The images build
-once on demand from the build contexts under [`docker/`](docker/README.md).
+without emulating the whole container, and without ptrace). On first use the
+images are **pulled prebuilt from GHCR** (multi-arch), falling back to a local
+build from the contexts under [`docker/`](docker/README.md) if a pull isn't
+available.
 
 Assembly gets its own view: the current instruction, a **registers** panel that
 highlights whichever register just changed, a **flags** strip (ZF/SF/CF/OF/…),

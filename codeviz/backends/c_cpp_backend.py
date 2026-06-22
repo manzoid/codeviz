@@ -23,35 +23,20 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 
 from . import _docker
 from .base import Availability, Backend, Execution
 
 IMAGE = "codeviz/c-cpp:1"
+GHCR = "ghcr.io/manzoid/codeviz-c-cpp:1"
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _BUILD_CONTEXT = os.path.join(_ROOT, "docker", "c_cpp")
 
 
-def _build_image() -> None:
-    """Build the tracer image if it is not present.  Native arch (no
-    --platform), so this is fast on Apple Silicon.
-
-    Streams docker's progress to stderr (with a clear heads-up) so the one-time
-    build never looks like a hang.
-    """
-    docker = _docker.docker_path()
-    if not docker:
-        raise RuntimeError("Docker not found on PATH.")
-    print(f"codeviz: building {IMAGE} (one-time, ~2 min) — first use of C/C++ ...",
-          file=sys.stderr, flush=True)
-    # stdout->stderr keeps our own stdout clean; inherit so progress is visible.
-    proc = subprocess.run([docker, "build", "-t", IMAGE, _BUILD_CONTEXT],
-                          stdout=sys.stderr, timeout=1200)
-    if proc.returncode != 0:
-        raise RuntimeError(f"failed to build {IMAGE} (see docker output above)")
-    print(f"codeviz: built {IMAGE}.", file=sys.stderr, flush=True)
+def _ensure_image() -> None:
+    """Pull the prebuilt image from GHCR if possible, else build locally."""
+    _docker.ensure_image(IMAGE, GHCR, _BUILD_CONTEXT, "C/C++")
 
 
 def _run_container(lang: str, code: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -94,12 +79,14 @@ class _CFamilyBackend(Backend):
         if info.returncode != 0:
             return ("unavailable", "Docker daemon not running — start Docker Desktop.")
         if not _docker.image_exists(IMAGE):
-            return ("build", f"first run builds {IMAGE} (~2 min); pre-build: codeviz setup {self.name}")
+            return ("build", f"first run fetches the image (or builds it); pre-fetch: codeviz setup {self.name}")
         return ("ready", "")
 
+    def ensure_image(self) -> None:
+        _ensure_image()
+
     def trace(self, code: str, filename: str) -> dict:
-        if not _docker.image_exists(IMAGE):
-            _build_image()
+        _ensure_image()
         proc = _run_container(self.lang, code)
         if proc.returncode != 0:
             raise RuntimeError(

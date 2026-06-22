@@ -19,28 +19,20 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 
 from . import _docker
 from .base import Availability, Backend, Execution
 
 IMAGE = "codeviz/asm-x86:1"
+GHCR = "ghcr.io/manzoid/codeviz-asm-x86:1"
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _BUILD_CONTEXT = os.path.join(_ROOT, "docker", "asm")
 
 
-def _build_image() -> None:
-    docker = _docker.docker_path()
-    if not docker:
-        raise RuntimeError("Docker not found on PATH.")
-    print(f"codeviz: building {IMAGE} (one-time, ~2 min) — first use of assembly ...",
-          file=sys.stderr, flush=True)
-    proc = subprocess.run([docker, "build", "-t", IMAGE, _BUILD_CONTEXT],
-                          stdout=sys.stderr, timeout=1200)
-    if proc.returncode != 0:
-        raise RuntimeError(f"failed to build {IMAGE} (see docker output above)")
-    print(f"codeviz: built {IMAGE}.", file=sys.stderr, flush=True)
+def _ensure_image() -> None:
+    """Pull the prebuilt image from GHCR if possible, else build locally."""
+    _docker.ensure_image(IMAGE, GHCR, _BUILD_CONTEXT, "x86-64 asm")
 
 
 class AsmBackend(Backend):
@@ -65,12 +57,14 @@ class AsmBackend(Backend):
         if info.returncode != 0:
             return ("unavailable", "Docker daemon not running — start Docker Desktop.")
         if not _docker.image_exists(IMAGE):
-            return ("build", f"first run builds {IMAGE} (~2 min); pre-build: codeviz setup asm")
+            return ("build", "first run fetches the image (or builds it); pre-fetch: codeviz setup asm")
         return ("ready", "")
 
+    def ensure_image(self) -> None:
+        _ensure_image()
+
     def trace(self, code: str, filename: str) -> dict:
-        if not _docker.image_exists(IMAGE):
-            _build_image()
+        _ensure_image()
         docker = _docker.docker_path()
         # No --net=none: the qemu gdb stub uses loopback TCP inside the
         # container's own netns. Still isolated (own netns, no published ports).

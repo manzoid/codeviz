@@ -25,18 +25,31 @@ Tutor's legacy Valgrind / java_jail images:
 
 The build contexts live in this repo under `docker/c_cpp/` and `docker/java/`.
 
-## Building
+## Getting the images (pull-first, build-fallback)
 
-Each backend builds its image **lazily on first use** if it's missing, so you
-usually don't have to do anything. To pre-build explicitly:
+On first use, each backend obtains its image **automatically** — you usually
+don't do anything. The resolution order (`codeviz/backends/_docker.py`
+`ensure_image`):
+
+1. **Use the local image** if already present.
+2. **Pull the prebuilt image from GHCR** — `ghcr.io/manzoid/codeviz-{c-cpp,java,asm-x86}`,
+   multi-arch so each host gets its native arch. Fast, reproducible, can't fail
+   mid-build.
+3. **Build locally** from the in-repo context (offline, or if you edited a
+   Dockerfile).
+
+To pre-fetch eagerly (e.g. before a class):
 
 ```bash
-codeviz setup c       # or: cpp, java  — builds codeviz/c-cpp:1 / codeviz/java:1
+codeviz setup c       # or: cpp, java, asm
 ```
 
-`setup` runs `docker build` on the in-repo build context — natively for the
-host architecture (no `--platform`), so on Apple Silicon you get a native arm64
-image with no emulation.
+The images are published by `.github/workflows/images.yml` (buildx, multi-arch,
+on changes under `docker/`).
+
+> **One-time publisher step:** images pushed by GitHub Actions start **private**.
+> For users to `docker pull` without logging in, set each package's visibility
+> to **Public** once at <https://github.com/users/manzoid/packages>.
 
 ## Runtime sandboxing
 
