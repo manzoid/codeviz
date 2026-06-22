@@ -28,39 +28,35 @@ def _cmd_langs(args) -> int:
 def _cmd_setup(args) -> int:
     """Build the Docker image for a heavyweight backend.
 
-    The C/C++/Java build contexts (custom Valgrind, bundled JDK) are large and
-    legacy, so we don't vendor them.  Instead we shallow-clone OPT's mirror into
-    a cache and build the relevant subdirectory on demand.
+    These are OUR OWN modern, self-contained images, vendored as build contexts
+    under ``docker/`` in this repo and built for the host's native architecture
+    (no ``--platform`` override, so Apple Silicon gets native arm64):
+
+      * C / C++ — ``codeviz/c-cpp:1`` (FROM ubuntu:24.04, GDB Python-API tracer)
+      * Java    — ``codeviz/java:1``  (FROM eclipse-temurin:17-jdk, JDI tracer)
+
+    Backends also build their image lazily on first ``trace()`` if missing, so
+    ``setup`` is just an explicit, eager pre-build.
     """
     import subprocess
-    # (image tag, subdir within the OPT mirror)
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # (image tag, build context under docker/)
     targets = {
-        "c": ("pgbovine/opt-cpp-backend:v1", "v4-cokapi/backends/c_cpp"),
-        "cpp": ("pgbovine/opt-cpp-backend:v1", "v4-cokapi/backends/c_cpp"),
-        "java": ("pgbovine/cokapi-java:v1", "v4-cokapi/backends/java"),
+        "c": ("codeviz/c-cpp:1", os.path.join(_root, "docker", "c_cpp")),
+        "cpp": ("codeviz/c-cpp:1", os.path.join(_root, "docker", "c_cpp")),
+        "java": ("codeviz/java:1", os.path.join(_root, "docker", "java")),
     }
     if args.lang not in targets:
         print(f"setup target must be one of: {', '.join(sorted(targets))}", file=sys.stderr)
         return 2
-    tag, subdir = targets[args.lang]
+    tag, ctx = targets[args.lang]
 
-    cache = os.path.expanduser("~/.cache/codeviz/opt-mirror")
-    mirror = "https://github.com/forkcodeaiyc/OnlinePythonTutor2"
-    if not os.path.isdir(os.path.join(cache, ".git")):
-        os.makedirs(os.path.dirname(cache), exist_ok=True)
-        print(f"cloning OPT backend mirror into {cache} (one-time, large) ...")
-        rc = subprocess.call(["git", "clone", "--depth", "1", mirror, cache])
-        if rc != 0:
-            print("clone failed.", file=sys.stderr)
-            return rc
-
-    ctx = os.path.join(cache, subdir)
     if not os.path.isdir(ctx):
-        print(f"context not found in mirror: {ctx}", file=sys.stderr)
+        print(f"build context not found: {ctx}", file=sys.stderr)
         return 1
-    cmd = ["docker", "build", "--platform", "linux/amd64", "-t", tag, ctx]
+    cmd = ["docker", "build", "-t", tag, ctx]
     print("running:", " ".join(cmd))
-    print("(legacy ubuntu:14.04 image built under amd64 emulation — this is slow)")
+    print(f"(building our own native image {tag} — no amd64 emulation)")
     return subprocess.call(cmd)
 
 

@@ -1,0 +1,3 @@
+# Compiled tracer classes are produced inside the Docker build, never committed.
+*.class
+samples/*.class

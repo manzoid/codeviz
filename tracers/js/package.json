@@ -1,1 +1,1 @@
-{"name":"codeviz-js-tracer","private":true,"version":"0.1.0","description":"V8-inspector tracer + optional TypeScript support","dependencies":{"typescript":"^6.0.3"}}
+{"name":"codeviz-js-tracer","private":true,"version":"0.1.0","description":"V8-inspector tracer + optional TypeScript support","dependencies":{"source-map":"^0.7.4","typescript":"^6.0.3"}}

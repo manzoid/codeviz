@@ -1,35 +1,49 @@
 # Docker-based backends (C/C++, Java)
 
-Unlike Python and JavaScript (which trace locally), the C/C++ and Java backends
-run Online Python Tutor's heavyweight tracers inside containers:
+Unlike Python and JavaScript/TypeScript (which trace locally), the C/C++ and
+Java backends run **our own** tracers inside containers. These are modern,
+self-contained, MIT-clean images we build ourselves — **not** Online Python
+Tutor's legacy Valgrind / java_jail images:
 
-- **C/C++** — a custom-patched **Valgrind 3.11** (`pgbovine/opt-cpp-backend:v1`)
-- **Java** — David Pritchard's **java_jail** traceprinter (`pgbovine/cokapi-java:v1`)
+- **C/C++** — `codeviz/c-cpp:1`, `FROM ubuntu:24.04`. A GDB Python-API tracer
+  (`docker/c_cpp/tracer.py`) compiles with `-g -O0` and single-steps each
+  source line, following pointers to build the heap (shared pointers share one
+  `REF`). Native arm64.
+- **Java** — `codeviz/java:1`, `FROM eclipse-temurin:17-jdk`. An original
+  `com.sun.jdi` tracer (`docker/java/Tracer.java`) launches the user's class in
+  a child JVM, single-steps line-by-line, and BFS-encodes the referenced heap.
+  Native arm64.
 
-These build contexts are large (custom Valgrind source; a bundled JDK) and
-legacy (Ubuntu 14.04, x86_64), so this repo does **not** vendor them. Instead:
+The build contexts live in this repo under `docker/c_cpp/` and `docker/java/`.
+
+## Building
+
+Each backend builds its image **lazily on first use** if it's missing, so you
+usually don't have to do anything. To pre-build explicitly:
 
 ```bash
-codeviz setup c       # or: cpp, java
+codeviz setup c       # or: cpp, java  — builds codeviz/c-cpp:1 / codeviz/java:1
 ```
 
-`setup` shallow-clones OPT's backend mirror into `~/.cache/codeviz/opt-mirror`
-and runs `docker build` on the relevant subdirectory.
+`setup` runs `docker build` on the in-repo build context — natively for the
+host architecture (no `--platform`), so on Apple Silicon you get a native arm64
+image with no emulation.
+
+## Runtime sandboxing
+
+Containers run with `--net=none`, dropped capabilities, and memory/pid limits.
 
 ## Caveats
 
-- **Apple Silicon / arm64:** the images are x86_64 and build/run under amd64
-  emulation (`--platform linux/amd64`). Builds are slow; runtime tracing is
-  noticeably slower than the local Python/JS backends.
-- **Ubuntu 14.04 is EOL.** apt mirrors for it occasionally break; if a build
-  fails on `apt-get`, that's why. Modernizing these Dockerfiles is a known
-  follow-up.
-- **Licensing:** the Java traceprinter (java_jail) is **AGPL-3.0**. codeviz only
-  orchestrates the prebuilt image and vendors none of its source. If you
-  redistribute the image, preserve that license.
+- **C/C++ is teaching-grade:** no uninitialized-memory detection. Consecutive
+  identical states are collapsed (this cuts C++ `std::vector` constructor churn
+  dramatically).
+- **Licensing:** both tracers are our own work (MIT-clean). No OPT backend
+  source is vendored or shipped.
 
 ## Adding another containerized language later (e.g. Ruby)
 
-OPT also ships a Ruby backend (`v4-cokapi/backends/ruby`). To add it: create
-`codeviz/backends/ruby_backend.py` modeled on `c_cpp_backend.py`, add a `setup`
-target here, and register it in `codeviz/backends/__init__.py`.
+Create `codeviz/backends/ruby_backend.py` modeled on `c_cpp_backend.py` (lazy
+image build + sandboxed container run), add a build context under `docker/`, a
+`setup` target in `codeviz/cli.py`, and register the backend in
+`codeviz/backends/__init__.py`.

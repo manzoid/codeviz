@@ -22,12 +22,17 @@ turns source into that trace:
 | Language | Backend | Runs | Notes |
 |----------|---------|------|-------|
 | Python | vendored OPT `pg_logger` | locally | pure stdlib |
-| JavaScript / TypeScript | `tracers/js/trace.js` (V8 Inspector) | locally (Node 18+) | original; TS needs `typescript` |
-| C / C++ | OPT Valgrind backend | Docker | `codeviz setup c` |
-| Java | OPT java_jail | Docker | `codeviz setup java` (AGPL image) |
+| JavaScript | `tracers/js/trace.js` (V8 Inspector) | locally (Node 18+) | original tracer |
+| TypeScript | same tracer, transpiled w/ source maps | locally (Node 18+) | needs `typescript`; lines map back to the original `.ts` |
+| C / C++ | **our own** GDB Python-API tracer | Docker (`codeviz/c-cpp:1`) | native arm64; `codeviz setup c` |
+| Java | **our own** JDI tracer | Docker (`codeviz/java:1`) | native arm64, MIT-clean; `codeviz setup java` |
 
-Python and JS/TS are 100% local. C/C++ and Java use prebuilt Docker images you
-build once on demand — see [`docker/README.md`](docker/README.md).
+Python and JS are 100% local. TypeScript is local too — it's transpiled with
+source maps so highlighted lines point at the original `.ts` statements. C/C++
+and Java run in **our own** modern, self-contained Docker images (no OPT legacy
+Valgrind / java_jail). The images build once on demand from the build contexts
+under [`docker/`](docker/README.md) — natively for the host arch (arm64 on
+Apple Silicon), no amd64 emulation.
 
 ## Fluid workflow in VS Code (live reload)
 
@@ -55,8 +60,9 @@ Step with **← / →**, the slider, or **Run ⏩** to jump to the end. A VS Cod
    (`name`, `extensions`, `trace()`; override `check()` for toolchains).
 2. Register it in `codeviz/backends/__init__.py`.
 
-Nothing else changes — the renderer and CLI are language-agnostic. OPT already
-ships a Ruby backend that would slot in as a Docker backend.
+Nothing else changes — the renderer and CLI are language-agnostic. For a
+containerized language, model it on `c_cpp_backend.py` and add a build context
+under `docker/` (see [`docker/README.md`](docker/README.md)).
 
 ## Layout
 
@@ -64,9 +70,11 @@ ships a Ruby backend that would slot in as a Docker backend.
 codeviz.py              entry point
 codeviz/                package: cli, core, render, server, backends/
   backends/             base.py + one file per language (the extension point)
-tracers/js/trace.js     V8-Inspector JavaScript/TypeScript tracer (original)
+tracers/js/trace.js     V8-Inspector JS/TS tracer (original); TS via source maps
 vendor/                 OPT Python tracer (MIT), patched for 3.12
 viewer_template.html    the renderer
+docker/c_cpp/           our C/C++ image (GDB Python-API tracer)
+docker/java/            our Java image (JDI tracer)
 docker/README.md        building the C/C++/Java images
 examples/               demo.py / .js / .ts / .c / Demo.java
 ```
@@ -75,5 +83,7 @@ examples/               demo.py / .js / .ts / .c / Demo.java
 
 Best for teaching-sized snippets. The Python and JS tracers capture full state
 per step (slow for huge/deeply-recursive programs); object identity for JS is
-tracked via an injected WeakMap so aliasing is preserved. C/C++/Java inherit
-OPT's container limits. See `NOTICE` for attribution/licensing.
+tracked via an injected WeakMap so aliasing is preserved. C/C++/Java run in
+locked-down containers (`--net=none`, dropped capabilities, memory/pid limits).
+The C/C++ tracer is teaching-grade (no uninitialized-memory detection). See
+`NOTICE` for attribution/licensing.

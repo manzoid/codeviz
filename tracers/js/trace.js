@@ -11,6 +11,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { SourceMapConsumer } = require('source-map');
 
 const MAX_STEPS = 1000;
 const WATCHDOG_MS = 20000;
@@ -27,7 +28,7 @@ function parseArgs(argv) {
   return o;
 }
 
-function compileTypeScript(src) {
+function compileTypeScript(src, fileName) {
   let ts;
   try {
     ts = require('typescript');
@@ -36,12 +37,16 @@ function compileTypeScript(src) {
       "TypeScript support needs the 'typescript' package. Install it near codeviz " +
       "(npm i -g typescript, or npm i typescript in tracers/js).");
   }
-  // Strip types but keep line numbers stable (no downleveling).
+  // Emit a source map so executed-JS positions can be mapped back to the
+  // ORIGINAL .ts statements (naive line preservation drifts on multi-line
+  // type constructs like interfaces / type aliases).
   const out = ts.transpileModule(src, {
+    fileName: fileName,
     compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.CommonJS,
-                       removeComments: false, sourceMap: false },
+                       removeComments: false, sourceMap: true,
+                       inlineSourceMap: false, inlineSources: false },
   });
-  return out.outputText;
+  return { jsText: out.outputText, mapText: out.sourceMapText, sourceFileName: fileName };
 }
 
 // ---- minimal CDP client over the inspector WebSocket ----
@@ -78,7 +83,20 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   let code = fs.readFileSync(0, 'utf8');     // original source (shown in UI)
   let runCode = code;
-  if (opts.typescript) runCode = compileTypeScript(code);
+  // smConsumer + tsSourceName, when set, map executed-JS positions in the user
+  // script back to ORIGINAL .ts lines before they reach step.line.
+  let smConsumer = null;
+  let tsSourceName = null;
+  if (opts.typescript) {
+    const compiled = compileTypeScript(code, opts.name.replace(/\.js$/, '') + '.ts');
+    // Drop the trailing //# sourceMappingURL comment; we feed the map directly.
+    runCode = compiled.jsText.replace(/\n?\/\/#\s*sourceMappingURL=[^\n]*\s*$/, '');
+    if (compiled.mapText) {
+      const rawMap = JSON.parse(compiled.mapText);
+      tsSourceName = (rawMap.sources && rawMap.sources[0]) || compiled.sourceFileName;
+      smConsumer = await new SourceMapConsumer(rawMap);
+    }
+  }
 
   const stamp = `${process.pid}-${Date.now()}`;
   const tmp = path.join(os.tmpdir(), `codeviz-${stamp}.js`);
@@ -152,7 +170,7 @@ async function main() {
           const raw = d.description || (d.value && d.value.description) ||
                       (d.className ? d.className : 'Error');
           pendingException = String(raw).split('\n')[0];   // first line only
-          const step = await buildStep(cdp, params, userScriptId, scripts, stdout, pendingException);
+          const step = await buildStep(cdp, params, userScriptId, scripts, stdout, pendingException, smConsumer, tsSourceName);
           if (step) trace.push(step);
           await cdp.send('Debugger.resume').catch(() => {});
           finishSoon();
@@ -169,7 +187,7 @@ async function main() {
         if (topLine > origLineCount) { finish('sentinel'); return; }
 
         // In user code -> record a step and advance.
-        const step = await buildStep(cdp, params, userScriptId, scripts, stdout, pendingException);
+        const step = await buildStep(cdp, params, userScriptId, scripts, stdout, pendingException, smConsumer, tsSourceName);
         if (step) trace.push(step);
         if (trace.length >= MAX_STEPS) { await cdp.send('Debugger.resume').catch(() => {}); finish('max-steps'); return; }
         await cdp.send('Debugger.stepInto').catch(() => cdp.send('Debugger.resume').catch(() => {}));
@@ -190,7 +208,10 @@ async function main() {
   // last recorded step — reflect the complete program output on that step.
   if (trace.length) trace[trace.length - 1].stdout = stdout;
 
-  process.stdout.write(JSON.stringify({ code, trace, lang: 'javascript' }));
+  if (smConsumer) { try { smConsumer.destroy(); } catch (_) {} }
+
+  const lang = opts.typescript ? 'typescript' : 'javascript';
+  process.stdout.write(JSON.stringify({ code, trace, lang }));
   process.exit(0);
 }
 
@@ -225,15 +246,33 @@ async function stableId(cdp, ro) {
   return r.result.value;
 }
 
+// Map an executed-JS (0-based line, 0-based column) location back to the
+// ORIGINAL .ts line. Returns the JS line (1-based) unchanged when no map / no
+// hit, so non-TS tracing and unmapped positions stay correct.
+function mapLine(smConsumer, tsSourceName, jsLine0, jsCol0) {
+  const jsLine1 = jsLine0 + 1;
+  if (!smConsumer) return jsLine1;
+  let pos = smConsumer.originalPositionFor({
+    line: jsLine1, column: jsCol0 || 0, bias: SourceMapConsumer.GREATEST_LOWER_BOUND,
+  });
+  if (pos.line == null) {
+    pos = smConsumer.originalPositionFor({
+      line: jsLine1, column: jsCol0 || 0, bias: SourceMapConsumer.LEAST_UPPER_BOUND,
+    });
+  }
+  return pos.line != null ? pos.line : jsLine1;
+}
+
 // ---- build one OPT step from a Debugger.paused event ----
-async function buildStep(cdp, params, userScriptId, scripts, stdout, exceptionMsg) {
+async function buildStep(cdp, params, userScriptId, scripts, stdout, exceptionMsg, smConsumer, tsSourceName) {
   // keep only frames in the user script (drop Node internals)
   const userFrames = params.callFrames.filter((f) => f.location.scriptId === userScriptId);
   if (userFrames.length === 0) return null;  // inside library; skip
   await ensureHelper(cdp);
 
   const ctx = { cdp, heap: {}, seen: new Set(), queue: [] };
-  const topLine = userFrames[0].location.lineNumber + 1;
+  const topLoc = userFrames[0].location;
+  const topLine = mapLine(smConsumer, tsSourceName, topLoc.lineNumber, topLoc.columnNumber);
   const event = exceptionMsg ? 'exception' : 'step_line';
 
   // bottom (module) frame -> globals; the rest -> stack_to_render (top first)
