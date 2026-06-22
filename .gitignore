@@ -5,3 +5,5 @@ snippet.viz.html
 node_modules/
 tracers/js/node_modules/
 .DS_Store
+*.vsix
+editor/vscode/LICENSE

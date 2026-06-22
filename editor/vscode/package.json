@@ -1,0 +1,40 @@
+{
+  "name": "codeviz",
+  "displayName": "codeviz",
+  "description": "Step-through execution visualization for the current file — Python, JS/TS, C/C++, Java, x86-64 asm.",
+  "version": "0.1.0",
+  "publisher": "manzoid",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/manzoid/codeviz" },
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Visualization", "Education"],
+  "activationEvents": ["onCommand:codeviz.show"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "codeviz.show", "title": "codeviz: Visualize Current File" },
+      { "command": "codeviz.toggleFollow", "title": "codeviz: Toggle Auto-Follow Active Editor" }
+    ],
+    "keybindings": [
+      { "command": "codeviz.show", "key": "ctrl+alt+v", "mac": "cmd+alt+v", "when": "editorTextFocus" }
+    ],
+    "configuration": {
+      "title": "codeviz",
+      "properties": {
+        "codeviz.pythonPath": {
+          "type": "string", "default": "python3",
+          "description": "Python interpreter used to run codeviz."
+        },
+        "codeviz.scriptPath": {
+          "type": "string",
+          "default": "/Users/manzoid/code/src/github.com/manzoid/codeviz/codeviz.py",
+          "description": "Absolute path to codeviz.py."
+        },
+        "codeviz.autoFollow": {
+          "type": "boolean", "default": true,
+          "description": "Re-trace automatically when you switch to another supported file."
+        }
+      }
+    }
+  }
+}

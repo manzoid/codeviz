@@ -4,8 +4,7 @@
     {
       "label": "codeviz: serve current file",
       "type": "shell",
-      "command": "python3",
-      "args": ["${workspaceFolder}/codeviz.py", "${file}", "--serve", "--port", "8930"],
+      "command": "pkill -f 'codeviz\\.py.*serve' >/dev/null 2>&1 || true; sleep 0.3; exec python3 '/Users/manzoid/code/src/github.com/manzoid/codeviz/codeviz.py' '${file}' --serve --port 8930",
       "isBackground": true,
       "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
       "problemMatcher": []
