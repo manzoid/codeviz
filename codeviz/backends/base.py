@@ -72,6 +72,21 @@ class Backend(abc.ABC):
         """
         return Availability(True)
 
+    def status(self) -> tuple:
+        """Return ``(state, detail)`` for ``codeviz langs`` / ``doctor``.
+
+        ``state`` is one of:
+          * ``"ready"``        — usable right now
+          * ``"build"``        — toolchain is present but a one-time build (e.g.
+                                 a Docker image) happens on first use
+          * ``"unavailable"``  — cannot run; ``detail`` says why + how to fix
+
+        Default derives from :meth:`check`.  Container backends override this to
+        report whether their image has been built yet.
+        """
+        av = self.check()
+        return ("ready", "") if av.ok else ("unavailable", av.reason)
+
     @abc.abstractmethod
     def trace(self, code: str, filename: str) -> dict:
         """Execute ``code`` and return an OPT trace dict.

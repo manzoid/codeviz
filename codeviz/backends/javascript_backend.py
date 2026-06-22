@@ -67,6 +67,16 @@ class TypeScriptBackend(JavaScriptBackend):
         # confirm node here so we still give a useful message if it's missing.
         return base
 
+    def status(self) -> tuple:
+        base = super().status()  # node present + version ok?
+        if base[0] != "ready":
+            return base
+        ts_dir = os.path.join(_ROOT, "tracers", "js", "node_modules", "typescript")
+        if not os.path.isdir(ts_dir):
+            return ("unavailable",
+                    "TypeScript needs the 'typescript' package: (cd tracers/js && npm i typescript)")
+        return ("ready", "")
+
     def trace(self, code: str, filename: str) -> dict:
         # Compile TS -> JS via the bundled tracer's TypeScript support.
         proc = subprocess.run(

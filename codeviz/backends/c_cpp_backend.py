@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 
 from . import _docker
 from .base import Availability, Backend, Execution
@@ -35,18 +36,22 @@ _BUILD_CONTEXT = os.path.join(_ROOT, "docker", "c_cpp")
 
 def _build_image() -> None:
     """Build the tracer image if it is not present.  Native arch (no
-    --platform), so this is fast on Apple Silicon."""
+    --platform), so this is fast on Apple Silicon.
+
+    Streams docker's progress to stderr (with a clear heads-up) so the one-time
+    build never looks like a hang.
+    """
     docker = _docker.docker_path()
     if not docker:
         raise RuntimeError("Docker not found on PATH.")
-    proc = subprocess.run(
-        [docker, "build", "-t", IMAGE, _BUILD_CONTEXT],
-        capture_output=True, text=True, timeout=900,
-    )
+    print(f"codeviz: building {IMAGE} (one-time, ~2 min) — first use of C/C++ ...",
+          file=sys.stderr, flush=True)
+    # stdout->stderr keeps our own stdout clean; inherit so progress is visible.
+    proc = subprocess.run([docker, "build", "-t", IMAGE, _BUILD_CONTEXT],
+                          stdout=sys.stderr, timeout=1200)
     if proc.returncode != 0:
-        raise RuntimeError(
-            "failed to build %s:\n%s" % (IMAGE, (proc.stderr or proc.stdout)[-1500:])
-        )
+        raise RuntimeError(f"failed to build {IMAGE} (see docker output above)")
+    print(f"codeviz: built {IMAGE}.", file=sys.stderr, flush=True)
 
 
 def _run_container(lang: str, code: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -81,6 +86,16 @@ class _CFamilyBackend(Backend):
         # The image is built lazily on first trace(); availability only needs a
         # working daemon.
         return Availability(True)
+
+    def status(self) -> tuple:
+        if not _docker.docker_path():
+            return ("unavailable", "Docker not found on PATH. Install Docker Desktop.")
+        info = subprocess.run([_docker.docker_path(), "info"], capture_output=True, text=True)
+        if info.returncode != 0:
+            return ("unavailable", "Docker daemon not running — start Docker Desktop.")
+        if not _docker.image_exists(IMAGE):
+            return ("build", f"first run builds {IMAGE} (~2 min); pre-build: codeviz setup {self.name}")
+        return ("ready", "")
 
     def trace(self, code: str, filename: str) -> dict:
         if not _docker.image_exists(IMAGE):

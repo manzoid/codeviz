@@ -22,6 +22,7 @@ import base64
 import json
 import os
 import subprocess
+import sys
 
 from . import _docker
 from .base import Availability, Backend, Execution
@@ -49,22 +50,33 @@ class JavaBackend(Backend):
             return Availability(False, "Docker is installed but the daemon isn't running. Start Docker Desktop.")
         return Availability(True)
 
+    def status(self) -> tuple:
+        if not _docker.docker_path():
+            return ("unavailable", "Docker not found on PATH. Install Docker Desktop.")
+        info = subprocess.run([_docker.docker_path(), "info"], capture_output=True, text=True)
+        if info.returncode != 0:
+            return ("unavailable", "Docker daemon not running — start Docker Desktop.")
+        if not _docker.image_exists(IMAGE):
+            return ("build", f"first run builds {IMAGE} (~2 min); pre-build: codeviz setup java")
+        return ("ready", "")
+
     def _ensure_image(self) -> None:
         """Build ``codeviz/java:1`` from docker/java if it isn't present.
 
         Built for the host's native architecture — no ``--platform`` override,
-        so Apple Silicon gets a native arm64 image.
+        so Apple Silicon gets a native arm64 image.  Streams progress to stderr
+        with a heads-up so the one-time build never looks like a hang.
         """
         if _docker.image_exists(IMAGE):
             return
         docker = _docker.docker_path()
-        cmd = [docker, "build", "-t", IMAGE, _BUILD_CONTEXT]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+        print(f"codeviz: building {IMAGE} (one-time, ~2 min) — first use of Java ...",
+              file=sys.stderr, flush=True)
+        proc = subprocess.run([docker, "build", "-t", IMAGE, _BUILD_CONTEXT],
+                              stdout=sys.stderr, timeout=1200)
         if proc.returncode != 0:
-            raise RuntimeError(
-                "failed to build the Java tracer image "
-                f"({IMAGE}): {proc.stderr.strip()[-800:]}"
-            )
+            raise RuntimeError(f"failed to build {IMAGE} (see docker output above)")
+        print(f"codeviz: built {IMAGE}.", file=sys.stderr, flush=True)
 
     def trace(self, code: str, filename: str) -> dict:
         self._ensure_image()

@@ -12,16 +12,66 @@ from .render import render_html
 from .server import serve
 
 
+_STATE_MARK = {"ready": "[ ready ]", "build": "[ build ]", "unavailable": "[   x   ]"}
+
+
 def _cmd_langs(args) -> int:
     print("Supported languages:\n")
     for b in backends.all_backends():
-        avail = b.check()
-        mark = "ok " if avail.ok else "-- "
-        exts = " ".join(b.extensions)
-        line = f"  [{mark}] {b.label:<12} {exts}"
-        if not avail.ok:
-            line += f"   ({avail.reason})"
+        state, detail = b.status()
+        line = f"  {_STATE_MARK[state]} {b.label:<12} {' '.join(b.extensions)}"
+        if detail:
+            line += f"   — {detail}"
         print(line)
+    print("\n  ready = usable now · build = builds on first use · x = unavailable (see note)")
+    return 0
+
+
+def _cmd_doctor(args) -> int:
+    """Audit the environment and print actionable next steps per language."""
+    import platform
+    import shutil
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    print("codeviz doctor — environment\n")
+
+    print(f"  python      {platform.python_version()}  (ok)")
+
+    node = shutil.which("node")
+    if not node:
+        print("  node        not found      → JavaScript/TypeScript need Node 18+  (https://nodejs.org)")
+    else:
+        v = subprocess.run([node, "--version"], capture_output=True, text=True).stdout.strip()
+        try:
+            ok = int(v.lstrip("v").split(".")[0]) >= 18
+        except Exception:
+            ok = False
+        print(f"  node        {v}  ({'ok' if ok else 'need 18+'})   → JavaScript/TypeScript")
+
+    ts_dir = os.path.join(root, "tracers", "js", "node_modules", "typescript")
+    if os.path.isdir(ts_dir):
+        print("  typescript  installed     → TypeScript")
+    else:
+        print("  typescript  missing       → TypeScript: (cd tracers/js && npm i typescript)")
+
+    docker = shutil.which("docker")
+    if not docker:
+        print("  docker      not found      → C/C++/Java need Docker Desktop  (https://docker.com)")
+    else:
+        info = subprocess.run([docker, "info"], capture_output=True, text=True)
+        if info.returncode != 0:
+            print("  docker      not running    → start Docker Desktop (needed for C/C++/Java)")
+        else:
+            print("  docker      running        → C/C++/Java")
+
+    print("\nLanguages:")
+    nice = {"ready": "ready", "build": "first-run build", "unavailable": "unavailable"}
+    for b in backends.all_backends():
+        state, detail = b.status()
+        print(f"  {nice[state]:<16} {b.label:<12} {' '.join(b.extensions)}")
+        if detail:
+            print(f"       → {detail}")
     return 0
 
 
@@ -115,8 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="codeviz",
         description="Python Tutor-style step visualization, fully local. "
                     "Supports Python, JavaScript/TypeScript, C/C++, and Java.",
-        epilog="subcommands: 'codeviz langs' lists languages; "
-               "'codeviz setup <c|cpp|java>' builds a backend's Docker image.",
+        epilog="subcommands: 'codeviz langs' lists languages and readiness; "
+               "'codeviz doctor' audits your environment with fixes; "
+               "'codeviz setup <c|cpp|java>' pre-builds a backend's Docker image.",
     )
     p.add_argument("file", nargs="?", help="source file to visualize")
     p.add_argument("--code", help="inline source instead of a file")
@@ -135,6 +186,8 @@ def main(argv=None) -> int:
     # Dispatch subcommands manually so they don't collide with the FILE positional.
     if argv and argv[0] == "langs":
         return _cmd_langs(None)
+    if argv and argv[0] == "doctor":
+        return _cmd_doctor(None)
     if argv and argv[0] == "setup":
         sp = argparse.ArgumentParser(prog="codeviz setup")
         sp.add_argument("lang", help="c | cpp | java")
