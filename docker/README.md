@@ -13,6 +13,15 @@ Tutor's legacy Valgrind / java_jail images:
   `com.sun.jdi` tracer (`docker/java/Tracer.java`) launches the user's class in
   a child JVM, single-steps line-by-line, and BFS-encodes the referenced heap.
   Native arm64.
+- **x86-64 assembly** — `codeviz/asm-x86:1`, `FROM ubuntu:24.04` (native arch).
+  Cross-assembles the user's `.s` (entry `_start`, no libc) with
+  `binutils-x86-64-linux-gnu`, runs the program under **qemu-user** (whose gdb
+  stub does the instruction stepping — no ptrace), and traces it with
+  `gdb-multiarch` (`docker/asm/tracer.py`). Emits an assembly-shaped trace
+  (registers, decoded flags, stack window, current instruction) that the
+  renderer shows in a dedicated view. Run **without** `--net=none` (the qemu
+  stub needs loopback inside the container's own netns); still `--rm`,
+  caps-dropped, memory/pid-limited, no published ports.
 
 The build contexts live in this repo under `docker/c_cpp/` and `docker/java/`.
 

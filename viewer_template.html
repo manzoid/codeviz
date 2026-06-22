@@ -63,6 +63,27 @@
   #arrows { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
   .objects-host { position: relative; }
   .empty { color: #9ca3af; font-style: italic; }
+  /* --- assembly view --- */
+  .asm-sec { margin-bottom: 16px; }
+  .asm-sec h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .cur-insn { font: 13px/1.5 "SF Mono", Menlo, monospace; background: #1d1d1f; color: #e5e7eb;
+              padding: 8px 10px; border-radius: 6px; }
+  .cur-insn .pc { color: #9ca3af; }
+  .reg-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 3px 18px; }
+  .reg { display: flex; justify-content: space-between; padding: 2px 7px; border-radius: 4px;
+         font: 12px/1.5 "SF Mono", Menlo, monospace; border: 1px solid transparent; }
+  .reg .rn { color: #6b7280; }
+  .reg .rv { color: #1d4ed8; }
+  .reg.changed { background: var(--line-hl); border-color: #f0c000; }
+  .flags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .flag { padding: 2px 7px; border: 1px solid var(--border); border-radius: 4px; color: #b0b4ba;
+          font: 12px/1.4 "SF Mono", Menlo, monospace; }
+  .flag.set { color: #047857; border-color: #047857; font-weight: 600; }
+  .flag.changed { background: var(--line-hl); border-color: #f0c000; }
+  .stack-row { display: flex; justify-content: space-between; padding: 1px 7px;
+               font: 12px/1.5 "SF Mono", Menlo, monospace; }
+  .stack-row.top { background: #eef2ff; border-radius: 4px; }
+  .stack-row .sa { color: #9ca3af; }
 </style>
 </head>
 <body>
@@ -99,6 +120,7 @@
         <svg id="arrows"></svg>
       </div>
     </div>
+    <div id="asmpane" style="display:none"></div>
   </div>
 </div>
 
@@ -209,6 +231,51 @@ function renderFrame(title, names, locals, highlight){
   return f;
 }
 
+function escapeHtml(s){
+  return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+}
+
+const ASM_REG_ORDER = ["rax","rbx","rcx","rdx","rsi","rdi","rbp","rsp",
+                       "r8","r9","r10","r11","r12","r13","r14","r15","rip"];
+const ASM_FLAG_ORDER = ["ZF","SF","CF","OF","PF","AF","DF"];
+
+function drawAsm(step){
+  const prev = cur > 0 ? trace[cur - 1] : null;
+  const regs = step.registers || {}, pregs = (prev && prev.registers) || {};
+  const flags = step.flags || {}, pflags = (prev && prev.flags) || {};
+  let h = "";
+
+  h += `<div class="asm-sec"><h4>Current instruction</h4><div class="cur-insn">`;
+  if (step.pc) h += `<span class="pc">${escapeHtml(step.pc)}:</span>  `;
+  h += `${escapeHtml(step.instruction || "(none)")}</div></div>`;
+
+  h += `<div class="asm-sec"><h4>Registers</h4><div class="reg-grid">`;
+  ASM_REG_ORDER.forEach(r => {
+    if (!(r in regs)) return;
+    const changed = prev && regs[r] !== pregs[r] ? " changed" : "";
+    h += `<div class="reg${changed}"><span class="rn">${r}</span><span class="rv">${escapeHtml(regs[r])}</span></div>`;
+  });
+  h += `</div></div>`;
+
+  h += `<div class="asm-sec"><h4>Flags</h4><div class="flags">`;
+  ASM_FLAG_ORDER.forEach(fn => {
+    if (!(fn in flags)) return;
+    const set = flags[fn] ? " set" : "";
+    const changed = prev && flags[fn] !== pflags[fn] ? " changed" : "";
+    h += `<span class="flag${set}${changed}">${fn}=${flags[fn] ? 1 : 0}</span>`;
+  });
+  h += `</div></div>`;
+
+  h += `<div class="asm-sec"><h4>Stack (top of stack first)</h4>`;
+  (step.stack || []).forEach((s, i) => {
+    h += `<div class="stack-row${i === 0 ? " top" : ""}"><span class="sa">${escapeHtml(s.addr)}</span><span>${escapeHtml(s.value)}</span></div>`;
+  });
+  if (!(step.stack || []).length) h += `<div class="empty">(stack empty)</div>`;
+  h += `</div>`;
+
+  document.getElementById("asmpane").innerHTML = h;
+}
+
 function draw(){
   const step = trace[cur];
 
@@ -222,12 +289,26 @@ function draw(){
   const verb = {call: "about to run", step_line: "about to run", return: "returned from",
                 exception: "exception at"}[step.event] || step.event;
   let cap = `${verb} line ${step.line}`;
-  if (step.event === "return") cap = `${step.func_name}() ${cap.replace("returned from ", "returned — ")}`;
+  if (step.event === "return" && step.func_name) cap = `${step.func_name}() ${cap.replace("returned from ", "returned — ")}`;
   if (step.exception_msg) cap += ` — ${step.exception_msg}`;
   document.getElementById("caption").textContent = cap;
 
   // stdout
   document.getElementById("stdout").textContent = step.stdout || "";
+
+  // assembly gets a dedicated registers/flags/stack view instead of frames/heap
+  if (LANG === "asm"){
+    document.querySelector(".cols").style.display = "none";
+    document.getElementById("asmpane").style.display = "";
+    drawAsm(step);
+    document.getElementById("counter").textContent = `Step ${cur+1} / ${trace.length}`;
+    slider.value = cur;
+    document.getElementById("prev").disabled = cur === 0;
+    document.getElementById("first").disabled = cur === 0;
+    document.getElementById("next").disabled = cur === trace.length - 1;
+    document.getElementById("last").disabled = cur === trace.length - 1;
+    return;
+  }
 
   // frames
   const framesEl = document.getElementById("frames"); framesEl.innerHTML = "";

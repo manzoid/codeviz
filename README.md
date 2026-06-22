@@ -1,16 +1,18 @@
 # codeviz
 
 Python Tutor-style **step-through execution visualization**, fully local — for
-**Python, JavaScript/TypeScript, C/C++, and Java**. Produces a single
-self-contained HTML page with a code highlight, stack frames, heap objects, and
-reference arrows. No internet at runtime; no cloud.
+**Python, JavaScript/TypeScript, C/C++, Java, and x86-64 assembly**. Produces a
+single self-contained HTML page with a code highlight, stack frames, heap
+objects, and reference arrows (and a dedicated registers/flags/stack view for
+assembly). No internet at runtime; no cloud.
 
 ```bash
 python3 codeviz.py examples/demo.py --open        # Python
 python3 codeviz.py examples/demo.js --open        # JavaScript
 python3 codeviz.py examples/demo.ts --open        # TypeScript (needs `npm i -g typescript`)
-python3 codeviz.py --code 'a=[1,2]; b=a; b.append(3)' --lang .py
+python3 codeviz.py examples/count_down.s --open   # x86-64 assembly (Docker)
 python3 codeviz.py langs                           # what's supported / ready
+python3 codeviz.py doctor                          # audit env + per-language fixes
 ```
 
 ## How it works
@@ -26,13 +28,21 @@ turns source into that trace:
 | TypeScript | same tracer, transpiled w/ source maps | locally (Node 18+) | needs `typescript`; lines map back to the original `.ts` |
 | C / C++ | **our own** GDB Python-API tracer | Docker (`codeviz/c-cpp:1`) | native arm64; `codeviz setup c` |
 | Java | **our own** JDI tracer | Docker (`codeviz/java:1`) | native arm64, MIT-clean; `codeviz setup java` |
+| x86-64 asm | **our own** GDB + qemu-user tracer | Docker (`codeviz/asm-x86:1`) | dedicated registers/flags/stack view; `codeviz setup asm` |
 
 Python and JS are 100% local. TypeScript is local too — it's transpiled with
-source maps so highlighted lines point at the original `.ts` statements. C/C++
-and Java run in **our own** modern, self-contained Docker images (no OPT legacy
-Valgrind / java_jail). The images build once on demand from the build contexts
-under [`docker/`](docker/README.md) — natively for the host arch (arm64 on
-Apple Silicon), no amd64 emulation.
+source maps so highlighted lines point at the original `.ts` statements. C/C++,
+Java, and assembly run in **our own** modern, self-contained Docker images (no
+OPT legacy Valgrind / java_jail). The C/C++ and Java images are native arm64;
+the assembly image is native too — it cross-assembles the x86-64 program and
+runs *just that* under qemu-user's gdb stub (so x86-64 is faithfully emulated
+without emulating the whole container, and without ptrace). The images build
+once on demand from the build contexts under [`docker/`](docker/README.md).
+
+Assembly gets its own view: the current instruction, a **registers** panel that
+highlights whichever register just changed, a **flags** strip (ZF/SF/CF/OF/…),
+and a **stack** window — so loops like `count_up.s` vs `count_down.s` make the
+compare-flag vs zero-flag branch logic visible.
 
 ## Fluid workflow in VS Code (live reload)
 
@@ -75,8 +85,9 @@ vendor/                 OPT Python tracer (MIT), patched for 3.12
 viewer_template.html    the renderer
 docker/c_cpp/           our C/C++ image (GDB Python-API tracer)
 docker/java/            our Java image (JDI tracer)
-docker/README.md        building the C/C++/Java images
-examples/               demo.py / .js / .ts / .c / Demo.java
+docker/asm/             our x86-64 asm image (qemu-user + gdb-multiarch tracer)
+docker/README.md        building the C/C++/Java/asm images
+examples/               demo.py/.js/.ts/.c, Demo.java, hello.s, count_up.s, count_down.s
 ```
 
 ## Limits

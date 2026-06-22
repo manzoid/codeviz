@@ -95,6 +95,7 @@ def _cmd_setup(args) -> int:
         "c": ("codeviz/c-cpp:1", os.path.join(_root, "docker", "c_cpp")),
         "cpp": ("codeviz/c-cpp:1", os.path.join(_root, "docker", "c_cpp")),
         "java": ("codeviz/java:1", os.path.join(_root, "docker", "java")),
+        "asm": ("codeviz/asm-x86:1", os.path.join(_root, "docker", "asm")),
     }
     if args.lang not in targets:
         print(f"setup target must be one of: {', '.join(sorted(targets))}", file=sys.stderr)

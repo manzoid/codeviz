@@ -58,14 +58,27 @@ Run inside a codeviz-provided, version-pinned Docker image. The host needs only
 Docker; the toolchain lives in the image. This is the default home for any
 language whose tracing is version- or platform-sensitive.
 
+All images below are **our own**, built from contexts in `docker/` (MIT-clean;
+no OPT legacy Valgrind / java_jail is vendored or shipped).
+
 | Language | Image | Mechanism | Backend |
 |----------|-------|-----------|---------|
-| C | `pgbovine/opt-cpp-backend:v1` | Valgrind-based OPT backend | `CBackend` |
-| C++ | `pgbovine/opt-cpp-backend:v1` | Valgrind-based OPT backend | `CppBackend` |
-| Java | `pgbovine/cokapi-java:v1` | java_jail traceprinter (JDI) | `JavaBackend` |
+| C | `codeviz/c-cpp:1` | our GDB Python-API tracer (native arm64) | `CBackend` |
+| C++ | `codeviz/c-cpp:1` | our GDB Python-API tracer (native arm64) | `CppBackend` |
+| Java | `codeviz/java:1` | our `com.sun.jdi` tracer (native arm64) | `JavaBackend` |
+| x86-64 asm | `codeviz/asm-x86:1` | cross-assemble + qemu-user gdb stub + `gdb-multiarch` | `AsmBackend` |
 | _future:_ Ruby | (pinned image) | `TracePoint` in-container | — |
 | _future:_ Dart | (pinned image) | VM Service in-container | — |
 | _future:_ Go | (pinned image) | (TBD in-container) | — |
+
+Assembly is the one place x86-64 is emulated (the subject matter requires it),
+but only the *traced program* runs under qemu-user — the container itself is
+native, and qemu's gdb stub provides stepping without ptrace.
+
+**Release-time TODO** (not needed for local/solo use): publish multi-arch images
+to GHCR and switch container backends to *pull-first, build-fallback*, and pin
+apt package versions, so other users get identical, fast, reliable images
+without a local build.
 
 ### 3. Transpiled-to-a-target — `Execution.TRANSPILE`
 

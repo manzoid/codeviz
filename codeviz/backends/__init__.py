@@ -6,6 +6,7 @@ Nothing else in the codebase needs to change.
 """
 from __future__ import annotations
 
+from .asm_backend import AsmBackend
 from .base import Availability, Backend, Execution
 from .c_cpp_backend import CBackend, CppBackend
 from .java_backend import JavaBackend
@@ -20,6 +21,7 @@ _BACKENDS: list[Backend] = [
     CBackend(),
     CppBackend(),
     JavaBackend(),
+    AsmBackend(),
 ]
 
 _BY_EXT: dict[str, Backend] = {
