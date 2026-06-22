@@ -22,8 +22,8 @@
   button:disabled { opacity: .4; cursor: default; }
   input[type=range] { width: 220px; }
   .wrap { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr); gap: 0; }
-  .pane { padding: 14px 16px; min-height: 60vh; }
-  .left { border-right: 1px solid var(--border); }
+  .pane { padding: 14px 16px; min-height: 60vh; min-width: 0; }
+  .left { border-right: 1px solid var(--border); overflow-x: auto; }
   pre.code { margin: 0; font: 13px/1.6 "SF Mono", Menlo, Consolas, monospace; }
   .codeline { display: block; padding: 0 8px; border-radius: 4px; white-space: pre; }
   .codeline .ln { display: inline-block; width: 2.2em; color: #b0b4ba; text-align: right;

@@ -87,7 +87,8 @@ docker/c_cpp/           our C/C++ image (GDB Python-API tracer)
 docker/java/            our Java image (JDI tracer)
 docker/asm/             our x86-64 asm image (qemu-user + gdb-multiarch tracer)
 docker/README.md        building the C/C++/Java/asm images
-examples/               demo.py/.js/.ts/.c, Demo.java, hello.s, count_up.s, count_down.s
+examples/               demo.py/.js/.ts/.c, Demo.java, hello.s,
+                        count_up.s, count_down.s, count_down_print.s
 ```
 
 ## Limits
