@@ -6,8 +6,8 @@ see LICENSE.
 
 Vendored: Online Python Tutor — Python tracer
 ---------------------------------------------
-  vendor/pg_logger.py
-  vendor/pg_encoder.py
+  codeviz/vendor/pg_logger.py
+  codeviz/vendor/pg_encoder.py
 
 From Online Python Tutor (https://github.com/pgbovine/OnlinePythonTutor/),
 Copyright (C) Philip J. Guo (philip@pgbovine.net), MIT License.
@@ -20,15 +20,13 @@ Local modifications:
 The OPT trace JSON format (consumed by viewer_template.html and produced by the
 JavaScript tracer) also originates from Online Python Tutor.
 
-Not vendored: C/C++ and Java backends
--------------------------------------
-The C/C++ (Valgrind-based) and Java (java_jail traceprinter) tracers are run as
-prebuilt Docker images built on demand from OPT's mirror (see docker/README.md).
-Their source is NOT included in this repository.
+Original container tracers (C/C++, Java, x86-64 asm)
+----------------------------------------------------
+The C/C++ (GDB Python-API), Java (com.sun.jdi), and x86-64 assembly (qemu-user +
+gdb-multiarch) tracers under codeviz/docker/ are codeviz's OWN work, MIT-licensed.
+They do NOT vendor OPT's Valgrind backend or the AGPL java_jail / traceprinter —
+those are not used. Built into images published to GHCR (pull-first) or built
+locally from the in-repo contexts.
 
-  - C/C++ backend: MIT (Philip J. Guo)
-  - Java java_jail / traceprinter: AGPL-3.0 (David Pritchard). codeviz only
-    orchestrates the image; redistributors of the image must preserve AGPL.
-
-The JavaScript/TypeScript tracer (tracers/js/trace.js) is original work for the
-modern V8 Inspector Protocol and is NOT derived from OPT's jslogger.js.
+The JavaScript/TypeScript tracer (codeviz/tracers/js/trace.js) is likewise original
+work for the modern V8 Inspector Protocol, NOT derived from OPT's jslogger.js.

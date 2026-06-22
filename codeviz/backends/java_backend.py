@@ -29,9 +29,9 @@ from .base import Availability, Backend, Execution
 IMAGE = "codeviz/java:1"
 GHCR = "ghcr.io/manzoid/codeviz-java:1"
 
-# Build context: docker/java at the repo root.
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_BUILD_CONTEXT = os.path.join(_ROOT, "docker", "java")
+# Build context ships inside the package (codeviz/docker/java).
+_PKG = os.path.dirname(os.path.dirname(__file__))
+_BUILD_CONTEXT = os.path.join(_PKG, "docker", "java")
 
 
 class JavaBackend(Backend):

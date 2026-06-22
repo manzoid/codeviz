@@ -26,8 +26,8 @@ from .base import Availability, Backend, Execution
 IMAGE = "codeviz/asm-x86:1"
 GHCR = "ghcr.io/manzoid/codeviz-asm-x86:1"
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_BUILD_CONTEXT = os.path.join(_ROOT, "docker", "asm")
+_PKG = os.path.dirname(os.path.dirname(__file__))  # the codeviz package dir
+_BUILD_CONTEXT = os.path.join(_PKG, "docker", "asm")
 
 
 def _ensure_image() -> None:

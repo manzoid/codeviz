@@ -3,10 +3,11 @@ snippet.viz.html
 **/__pycache__/
 *.pyc
 node_modules/
-tracers/js/node_modules/
+codeviz/tracers/js/node_modules/
 .DS_Store
 *.vsix
 editor/vscode/LICENSE
 *.egg-info/
 build/
 dist/
+!codeviz/editor/codeviz.vsix

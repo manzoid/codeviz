@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 
-_TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "viewer_template.html")
+_TEMPLATE = os.path.join(os.path.dirname(__file__), "viewer_template.html")
 
 
 def render_html(data: dict, title: str, lang: str = "python") -> str:

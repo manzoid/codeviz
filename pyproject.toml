@@ -21,11 +21,23 @@ codeviz = "codeviz.cli:main"
 [project.urls]
 Homepage = "https://github.com/manzoid/codeviz"
 
-# Package only the importable Python package. The runtime data files
-# (viewer_template.html, vendor/, tracers/, docker/) live at the repo root and
-# are resolved relative to it — install editable (`pip install -e .`) so they
-# are found. The top-level codeviz.py dev shim is intentionally NOT packaged
-# (it would clash with the `codeviz` package name).
+# The runtime data (renderer template, Python/JS tracers, Docker build
+# contexts) lives INSIDE the codeviz package and is shipped as package data, so
+# a normal (non-editable) install is fully self-contained — no clone required.
+# The top-level codeviz.py dev shim is intentionally NOT packaged (it would
+# clash with the `codeviz` package name).
 [tool.setuptools]
 packages = ["codeviz", "codeviz.backends"]
 py-modules = []
+
+[tool.setuptools.package-data]
+codeviz = [
+  "viewer_template.html",
+  "vendor/*.py",
+  "tracers/js/trace.js",
+  "tracers/js/package.json",
+  "docker/README.md",
+  "docker/*/*",
+  "docker/*/*/*",
+  "editor/*.vsix",
+]

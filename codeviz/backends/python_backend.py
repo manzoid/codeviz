@@ -8,7 +8,8 @@ import sys
 
 from .base import Backend, Execution
 
-_VENDOR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "vendor")
+# vendor/ ships inside the codeviz package (codeviz/vendor).
+_VENDOR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vendor")
 
 
 class PythonBackend(Backend):

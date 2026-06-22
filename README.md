@@ -8,17 +8,22 @@ assembly). No internet at runtime; no cloud.
 
 ## Install
 
+No clone to keep around — install straight from GitHub with
+[uv](https://docs.astral.sh/uv/):
+
 ```bash
-git clone https://github.com/manzoid/codeviz
-cd codeviz
-./install.sh
+uv tool install git+https://github.com/manzoid/codeviz
+codeviz install-extension      # optional: the VS Code extension
 ```
 
-`install.sh` installs the `codeviz` command, the JS/TS tracer deps, and the VS
-Code extension (and is safe to re-run). **Prerequisites:** Python 3.9+ (required);
-**Node 18+** for JavaScript/TypeScript and **Docker** for C/C++/Java/asm are
-optional — those languages activate only when present. Run `codeviz doctor`
-anytime to see what's ready and how to enable the rest.
+(`pipx install git+https://github.com/manzoid/codeviz` works too.) Or from a
+clone, `git clone … && cd codeviz && ./install.sh`.
+
+**Prerequisites:** Python 3.9+ (required). **Node 18+** for JavaScript/TypeScript
+and **Docker** for C/C++/Java/asm are optional — those languages activate only
+when present (TypeScript fetches its compiler on first use; the Docker images
+pull prebuilt from GHCR). Run `codeviz doctor` anytime to see what's ready and
+how to enable the rest.
 
 In VS Code: **Cmd+Alt+V** on a file opens the visualization beside your editor
 (it follows the active file and re-traces on save).
@@ -58,7 +63,7 @@ the assembly image is native too — it cross-assembles the x86-64 program and
 runs *just that* under qemu-user's gdb stub (so x86-64 is faithfully emulated
 without emulating the whole container, and without ptrace). On first use the
 images are **pulled prebuilt from GHCR** (multi-arch), falling back to a local
-build from the contexts under [`docker/`](docker/README.md) if a pull isn't
+build from the contexts under [`docker/`](codeviz/docker/README.md) if a pull isn't
 available.
 
 Assembly gets its own view: the current instruction, a **registers** panel that
@@ -94,23 +99,25 @@ Step with **← / →**, the slider, or **Run ⏩** to jump to the end. A VS Cod
 
 Nothing else changes — the renderer and CLI are language-agnostic. For a
 containerized language, model it on `c_cpp_backend.py` and add a build context
-under `docker/` (see [`docker/README.md`](docker/README.md)).
+under `codeviz/docker/` (see [`docker/README.md`](codeviz/docker/README.md)).
 
 ## Layout
 
+All runtime data lives inside the `codeviz/` package, so installs are
+self-contained (no clone needed):
+
 ```
-codeviz.py              entry point
-codeviz/                package: cli, core, render, server, backends/
-  backends/             base.py + one file per language (the extension point)
-tracers/js/trace.js     V8-Inspector JS/TS tracer (original); TS via source maps
-vendor/                 OPT Python tracer (MIT), patched for 3.12
-viewer_template.html    the renderer
-docker/c_cpp/           our C/C++ image (GDB Python-API tracer)
-docker/java/            our Java image (JDI tracer)
-docker/asm/             our x86-64 asm image (qemu-user + gdb-multiarch tracer)
-docker/README.md        building the C/C++/Java/asm images
-examples/               demo.py/.js/.ts/.c, Demo.java, hello.s,
-                        count_up.s, count_down.s, count_down_print.s
+codeviz.py                  dev entry point (`python3 codeviz.py …`)
+codeviz/                    the package (pip/uv-installable)
+  cli, core, render, server
+  backends/                 base.py + one file per language (extension point)
+  viewer_template.html      the renderer
+  vendor/                   OPT Python tracer (MIT), patched for 3.12
+  tracers/js/trace.js       V8-Inspector JS/TS tracer (original); TS via source maps
+  docker/{c_cpp,java,asm}/  our container tracers (GDB / JDI / qemu-user)
+  editor/codeviz.vsix       bundled VS Code extension (codeviz install-extension)
+editor/vscode/              extension source
+examples/                   demo.py/.js/.ts/.c, Demo.java, hello.s, count_*.s
 ```
 
 ## Limits

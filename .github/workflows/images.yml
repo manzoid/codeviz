@@ -16,7 +16,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "docker/**"
+      - "codeviz/docker/**"
       - ".github/workflows/images.yml"
   workflow_dispatch:
 
@@ -31,9 +31,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: codeviz-c-cpp, context: docker/c_cpp, version: "1" }
-          - { name: codeviz-java, context: docker/java, version: "1" }
-          - { name: codeviz-asm-x86, context: docker/asm, version: "1" }
+          - { name: codeviz-c-cpp, context: codeviz/docker/c_cpp, version: "1" }
+          - { name: codeviz-java, context: codeviz/docker/java, version: "1" }
+          - { name: codeviz-asm-x86, context: codeviz/docker/asm, version: "1" }
     steps:
       - uses: actions/checkout@v4
 

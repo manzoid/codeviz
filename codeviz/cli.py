@@ -33,7 +33,6 @@ def _cmd_doctor(args) -> int:
     import shutil
     import subprocess
 
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     print("codeviz doctor — environment\n")
 
     print(f"  python      {platform.python_version()}  (ok)")
@@ -49,11 +48,13 @@ def _cmd_doctor(args) -> int:
             ok = False
         print(f"  node        {v}  ({'ok' if ok else 'need 18+'})   → JavaScript/TypeScript")
 
-    ts_dir = os.path.join(root, "tracers", "js", "node_modules", "typescript")
-    if os.path.isdir(ts_dir):
-        print("  typescript  installed     → TypeScript")
+    from .backends.javascript_backend import _ts_deps_present
+    if _ts_deps_present():
+        print("  typescript  ready          → TypeScript")
+    elif shutil.which("npm"):
+        print("  typescript  on first use   → TypeScript (fetched once via npm)")
     else:
-        print("  typescript  missing       → TypeScript: (cd tracers/js && npm i typescript)")
+        print("  typescript  needs npm      → TypeScript: install Node (includes npm)")
 
     docker = shutil.which("docker")
     if not docker:
@@ -100,6 +101,25 @@ def _cmd_setup(args) -> int:
         return 1
     print(f"{backend.label} image ready.")
     return 0
+
+
+def _cmd_install_extension(args) -> int:
+    """Install the bundled VS Code extension via the `code` CLI."""
+    import shutil
+    import subprocess
+    code = shutil.which("code")
+    if not code:
+        print("VS Code 'code' CLI not found. In VS Code: Cmd+Shift+P → "
+              "'Shell Command: Install code command in PATH', then re-run.", file=sys.stderr)
+        return 1
+    vsix = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor", "codeviz.vsix")
+    if not os.path.exists(vsix):
+        print(f"bundled extension not found at {vsix}", file=sys.stderr)
+        return 1
+    rc = subprocess.call([code, "--install-extension", vsix, "--force"])
+    if rc == 0:
+        print("codeviz VS Code extension installed. Reload VS Code, then Cmd+Alt+V on a file.")
+    return rc
 
 
 def _output_path(args, default_base: str) -> str:
@@ -157,9 +177,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="codeviz",
         description="Python Tutor-style step visualization, fully local. "
                     "Supports Python, JavaScript/TypeScript, C/C++, and Java.",
-        epilog="subcommands: 'codeviz langs' lists languages and readiness; "
-               "'codeviz doctor' audits your environment with fixes; "
-               "'codeviz setup <c|cpp|java>' pre-builds a backend's Docker image.",
+        epilog="subcommands: langs (list languages + readiness) · doctor (audit "
+               "env + fixes) · setup <c|cpp|java|asm> (pre-fetch an image) · "
+               "install-extension (install the VS Code extension).",
     )
     p.add_argument("file", nargs="?", help="source file to visualize")
     p.add_argument("--code", help="inline source instead of a file")
@@ -180,6 +200,8 @@ def main(argv=None) -> int:
         return _cmd_langs(None)
     if argv and argv[0] == "doctor":
         return _cmd_doctor(None)
+    if argv and argv[0] == "install-extension":
+        return _cmd_install_extension(None)
     if argv and argv[0] == "setup":
         sp = argparse.ArgumentParser(prog="codeviz setup")
         sp.add_argument("lang", help="c | cpp | java")

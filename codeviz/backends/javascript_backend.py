@@ -14,11 +14,45 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 
 from .base import Availability, Backend, Execution
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_TRACER = os.path.join(_ROOT, "tracers", "js", "trace.js")
+_PKG = os.path.dirname(os.path.dirname(__file__))  # the codeviz package dir
+_TRACER = os.path.join(_PKG, "tracers", "js", "trace.js")
+
+# Node deps for the TypeScript path (typescript compiler + source-map) are NOT
+# shipped in the wheel; they're fetched into a user cache on first TS use.
+_TS_CACHE = os.path.join(os.path.expanduser("~"), ".cache", "codeviz", "js")
+
+
+def _ts_node_modules() -> str:
+    return os.path.join(_TS_CACHE, "node_modules")
+
+
+def _ts_deps_present() -> bool:
+    nm = _ts_node_modules()
+    return os.path.isdir(os.path.join(nm, "typescript")) and os.path.isdir(os.path.join(nm, "source-map"))
+
+
+def _ensure_ts_deps() -> str:
+    """Fetch typescript + source-map into the user cache once; return node_modules."""
+    if _ts_deps_present():
+        return _ts_node_modules()
+    if not shutil.which("npm"):
+        raise RuntimeError("TypeScript needs npm (from Node) to fetch the TypeScript compiler.")
+    os.makedirs(_TS_CACHE, exist_ok=True)
+    pkg = os.path.join(_TS_CACHE, "package.json")
+    if not os.path.exists(pkg):
+        with open(pkg, "w") as f:
+            f.write('{"name":"codeviz-js-deps","private":true}\n')
+    print("codeviz: fetching the TypeScript compiler (one-time) …", file=sys.stderr, flush=True)
+    proc = subprocess.run(["npm", "install", "--silent", "--no-audit", "--no-fund",
+                           "typescript", "source-map"],
+                          cwd=_TS_CACHE, stdout=sys.stderr, stderr=sys.stderr)
+    if proc.returncode != 0 or not _ts_deps_present():
+        raise RuntimeError("failed to fetch TypeScript deps (npm install failed)")
+    return _ts_node_modules()
 
 
 class JavaScriptBackend(Backend):
@@ -71,17 +105,19 @@ class TypeScriptBackend(JavaScriptBackend):
         base = super().status()  # node present + version ok?
         if base[0] != "ready":
             return base
-        ts_dir = os.path.join(_ROOT, "tracers", "js", "node_modules", "typescript")
-        if not os.path.isdir(ts_dir):
-            return ("unavailable",
-                    "TypeScript needs the 'typescript' package: (cd tracers/js && npm i typescript)")
-        return ("ready", "")
+        if _ts_deps_present():
+            return ("ready", "")
+        if not shutil.which("npm"):
+            return ("unavailable", "TypeScript needs npm (Node) to fetch the compiler.")
+        return ("build", "first run fetches the TypeScript compiler (one-time)")
 
     def trace(self, code: str, filename: str) -> dict:
-        # Compile TS -> JS via the bundled tracer's TypeScript support.
+        node_modules = _ensure_ts_deps()
+        env = dict(os.environ)
+        env["NODE_PATH"] = node_modules + (os.pathsep + env["NODE_PATH"] if env.get("NODE_PATH") else "")
         proc = subprocess.run(
             ["node", _TRACER, "--name", os.path.basename(filename), "--typescript"],
-            input=code, capture_output=True, text=True, timeout=90,
+            input=code, capture_output=True, text=True, timeout=120, env=env,
         )
         if proc.returncode != 0:
             raise RuntimeError(f"ts tracer failed: {proc.stderr.strip()}")

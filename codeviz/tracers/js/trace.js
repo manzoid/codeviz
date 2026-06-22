@@ -11,7 +11,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
-const { SourceMapConsumer } = require('source-map');
+// `source-map` and `typescript` are required LAZILY (only on the TypeScript
+// path) so plain JavaScript tracing needs no node_modules at all. This module-
+// level binding is assigned in main() on the TS path and used by mapLine().
+let SourceMapConsumer = null;
 
 const MAX_STEPS = 1000;
 const WATCHDOG_MS = 20000;
@@ -92,6 +95,7 @@ async function main() {
     // Drop the trailing //# sourceMappingURL comment; we feed the map directly.
     runCode = compiled.jsText.replace(/\n?\/\/#\s*sourceMappingURL=[^\n]*\s*$/, '');
     if (compiled.mapText) {
+      ({ SourceMapConsumer } = require('source-map'));  // lazy: TS path only
       const rawMap = JSON.parse(compiled.mapText);
       tsSourceName = (rawMap.sources && rawMap.sources[0]) || compiled.sourceFileName;
       smConsumer = await new SourceMapConsumer(rawMap);
