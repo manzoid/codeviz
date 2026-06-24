@@ -103,23 +103,133 @@ def _cmd_setup(args) -> int:
     return 0
 
 
+def _select_editors(found, editor_arg):
+    """Resolve which detected editors to install the extension into.
+
+    Args:
+        found: List of ``(display_name, cli, path)`` tuples for VS Code-family
+            editors found on PATH.
+        editor_arg: Optional comma-separated CLI names from ``--editor``. When
+            provided, selection is non-interactive. When ``None``, the user
+            picks from a numbered list (accepting ``"1,3"`` or ``"all"``); a
+            lone editor is selected automatically.
+
+    Returns:
+        The selected ``(display_name, cli, path)`` tuples, or ``None`` when the
+        selection was invalid or no requested editor was available.
+    """
+    by_cli = {cli.lower(): (name, cli, path) for name, cli, path in found}
+
+    # Non-interactive path: --editor code,cursor
+    if editor_arg:
+        targets = []
+        for token in editor_arg.split(","):
+            key = token.strip().lower()
+            if not key:
+                continue
+            if key in by_cli:
+                targets.append(by_cli[key])
+            else:
+                print(f"warning: '{token.strip()}' not found on PATH; skipping.",
+                      file=sys.stderr)
+        if not targets:
+            print("none of the requested editors were found on PATH.", file=sys.stderr)
+            return None
+        return targets
+
+    # A single editor needs no prompt.
+    if len(found) == 1:
+        return found
+
+    # Interactive path: numbered list with multi-select.
+    print("Found multiple VS Code-family editors:\n")
+    for i, (name, cli, _) in enumerate(found, 1):
+        print(f"  {i}. {name}  ({cli})")
+    print('\nWhich to install into? e.g. "1,3" or "all"')
+    try:
+        reply = input("> ").strip().lower()
+    except EOFError:
+        print("\nno input (non-interactive). Use --editor to choose, "
+              "e.g. --editor code,cursor.", file=sys.stderr)
+        return None
+
+    if reply in ("all", "*"):
+        return found
+    targets = []
+    for token in reply.replace(" ", ",").split(","):
+        if not token:
+            continue
+        if not token.isdigit() or not 1 <= int(token) <= len(found):
+            print(f"invalid selection: {token}", file=sys.stderr)
+            return None
+        targets.append(found[int(token) - 1])
+    return targets
+
+
 def _cmd_install_extension(args) -> int:
-    """Install the bundled VS Code extension via the `code` CLI."""
+    """Install the bundled extension into VS Code or a compatible fork.
+
+    VS Code and its forks (Cursor, VSCodium, Antigravity) all expose a
+    ``<cli> --install-extension <vsix>`` command, so the same bundled VSIX
+    installs into any of them. This detects which editor CLIs are on PATH and
+    installs into the ones the user selects, either interactively from a
+    numbered list or non-interactively via ``--editor``.
+
+    Args:
+        args: Parsed CLI args. ``args.editor`` is an optional comma-separated
+            list of editor CLI names (e.g. ``"code,cursor"``) that skips the
+            interactive picker when given.
+
+    Returns:
+        Process exit code: 0 on success, non-zero on error or failed install.
+    """
     import shutil
     import subprocess
-    code = shutil.which("code")
-    if not code:
-        print("VS Code 'code' CLI not found. In VS Code: Cmd+Shift+P → "
-              "'Shell Command: Install code command in PATH', then re-run.", file=sys.stderr)
+
+    # (display name, CLI command on PATH). Forks reuse VS Code's extension CLI,
+    # so one VSIX serves them all; add new forks to this list.
+    editors = [
+        ("VS Code", "code"),
+        ("Cursor", "cursor"),
+        ("VSCodium", "codium"),
+        ("Antigravity", "antigravity-ide"),
+    ]
+
+    # Keep only editors whose CLI is actually on PATH.
+    found = [(name, cli, shutil.which(cli)) for name, cli in editors]
+    found = [(name, cli, path) for name, cli, path in found if path]
+    if not found:
+        clis = ", ".join(cli for _, cli in editors)
+        print(f"No VS Code-family editor CLI found on PATH ({clis}).\n"
+              "In VS Code: Cmd+Shift+P → 'Shell Command: Install code command "
+              "in PATH'. Cursor/VSCodium/Antigravity ship an equivalent. "
+              "Then re-run.", file=sys.stderr)
         return 1
+
     vsix = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor", "codeviz.vsix")
     if not os.path.exists(vsix):
         print(f"bundled extension not found at {vsix}", file=sys.stderr)
         return 1
-    rc = subprocess.call([code, "--install-extension", vsix, "--force"])
-    if rc == 0:
-        print("codeviz VS Code extension installed. Reload VS Code, then Cmd+Alt+V on a file.")
-    return rc
+
+    targets = _select_editors(found, getattr(args, "editor", None))
+    if not targets:
+        if targets is not None:
+            print("nothing selected.", file=sys.stderr)
+        return 1
+
+    # Install into each selected editor; the VSIX is identical for all.
+    failures = []
+    for name, cli, path in targets:
+        print(f"\nInstalling into {name} ({cli})...", flush=True)
+        if subprocess.call([path, "--install-extension", vsix, "--force"]) != 0:
+            failures.append(name)
+    if failures:
+        print(f"\nfailed for: {', '.join(failures)}", file=sys.stderr)
+        return 1
+    installed = ", ".join(name for name, _, _ in targets)
+    print(f"\ncodeviz extension installed into: {installed}. "
+          "Reload the editor, then Cmd+Alt+V on a file.")
+    return 0
 
 
 def _output_path(args, source) -> str:
@@ -186,7 +296,8 @@ def build_parser() -> argparse.ArgumentParser:
                     "Supports Python, JavaScript/TypeScript, C/C++, and Java.",
         epilog="subcommands: langs (list languages + readiness) · doctor (audit "
                "env + fixes) · setup <c|cpp|java|asm> (pre-fetch an image) · "
-               "install-extension (install the VS Code extension).",
+               "install-extension (install the editor extension into VS Code or "
+               "a fork: Cursor, VSCodium, Antigravity).",
     )
     p.add_argument("file", nargs="?", help="source file to visualize")
     p.add_argument("--code", help="inline source instead of a file")
@@ -208,7 +319,13 @@ def main(argv=None) -> int:
     if argv and argv[0] == "doctor":
         return _cmd_doctor(None)
     if argv and argv[0] == "install-extension":
-        return _cmd_install_extension(None)
+        sp = argparse.ArgumentParser(prog="codeviz install-extension")
+        sp.add_argument(
+            "--editor",
+            help="comma-separated editor CLIs to install into (code, cursor, "
+                 "codium, antigravity-ide); skips the interactive picker",
+        )
+        return _cmd_install_extension(sp.parse_args(argv[1:]))
     if argv and argv[0] == "setup":
         sp = argparse.ArgumentParser(prog="codeviz setup")
         sp.add_argument("lang", help="c | cpp | java")

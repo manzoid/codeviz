@@ -13,11 +13,15 @@ No clone to keep around — install straight from GitHub with
 
 ```bash
 uv tool install git+https://github.com/manzoid/codeviz
-codeviz install-extension      # optional: the VS Code extension
+codeviz install-extension      # optional: editor extension (VS Code or a fork)
 ```
 
 (`pipx install git+https://github.com/manzoid/codeviz` works too.) Or from a
 clone, `git clone … && cd codeviz && ./install.sh`.
+
+`install-extension` detects VS Code-family editors on your PATH — VS Code,
+Cursor, VSCodium, and Antigravity — and lets you choose which to install into
+(or pass `--editor cursor,code` to skip the prompt).
 
 **Prerequisites:** Python 3.9+ (required). **Node 18+** for JavaScript/TypeScript
 and **Docker** for C/C++/Java/asm are optional — those languages activate only
@@ -25,7 +29,7 @@ when present (TypeScript fetches its compiler on first use; the Docker images
 pull prebuilt from GHCR). Run `codeviz doctor` anytime to see what's ready and
 how to enable the rest.
 
-In VS Code: **Cmd+Alt+V** on a file opens the visualization beside your editor
+In VS Code (or a fork like Cursor or Antigravity): **Cmd+Alt+V** on a file opens the visualization beside your editor
 (it follows the active file and re-traces on save).
 
 ## Quick start
@@ -115,7 +119,7 @@ codeviz/                    the package (pip/uv-installable)
   vendor/                   OPT Python tracer (MIT), patched for 3.12
   tracers/js/trace.js       V8-Inspector JS/TS tracer (original); TS via source maps
   docker/{c_cpp,java,asm}/  our container tracers (GDB / JDI / qemu-user)
-  editor/codeviz.vsix       bundled VS Code extension (codeviz install-extension)
+  editor/codeviz.vsix       bundled editor extension (codeviz install-extension)
 editor/vscode/              extension source
 examples/                   demo.py/.js/.ts/.c, Demo.java, hello.s, count_*.s
 ```
