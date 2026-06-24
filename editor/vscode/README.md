@@ -21,7 +21,10 @@ Step with **← / → / Space** (or the on-screen buttons / slider).
 
 ## Install
 
-Packaged: `code --install-extension codeviz-0.1.0.vsix`
-(or **Extensions → … → Install from VSIX…**).
+Easiest: run `codeviz install-extension` — it detects VS Code and forks
+(Cursor, VSCodium, Antigravity) on your PATH and installs into the ones you pick.
+
+Packaged: `code --install-extension codeviz-0.1.0.vsix` (forks accept the same
+`--install-extension` flag), or **Extensions → … → Install from VSIX…**.
 
 From source (dev): open this folder in VS Code and press **F5**.
