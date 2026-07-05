@@ -1,9 +1,66 @@
-# Embedding the Python visualizer in a browser
+# Embedding the codeviz visualizer in a browser
 
-This describes how a downstream browser app (for example, a Pyodide-based
-exercise runner) can produce a codeviz visualization entirely client-side, with
-no server round-trip. Today this path is **Python-only** (see the limitation at
-the end).
+There are two ways for a downstream browser app to show a codeviz visualization.
+Pick based on whether you can run a local process:
+
+- **Local API (recommended, all languages).** Run `codeviz api` and POST snippets
+  to it. Works for Python and JavaScript (and C/C++/Java when their toolchains are
+  present), because it uses codeviz's real tracers. Needs a running process.
+- **In-browser via Pyodide (no process, Python-only).** Trace Python entirely
+  client-side with the vendored tracer. No server, but Python only.
+
+## Local API: `codeviz api`
+
+Start the on-demand trace server:
+
+```
+codeviz api            # serves http://127.0.0.1:8930
+codeviz api --port N   # a different port
+```
+
+It exposes:
+
+- `POST /trace` with JSON `{"code": "...", "lang": ".py"|".js"|".ts"|"python"|...}`
+  → `200 text/html`: the self-contained viewer page for that snippet.
+  → `400 application/json {"error": ...}` for an unsupported/unavailable language
+  or a bad request; `500` on an internal trace failure.
+- `GET /health` → `200 {"ok": true, "service": "codeviz"}` — use it to detect
+  whether codeviz is running.
+
+CORS is open (`Access-Control-Allow-Origin: *`) so a static page on any origin can
+call it. It binds to `127.0.0.1` only and runs code locally, exactly like the CLI
+— point it only at code you trust (a single-user local tool).
+
+Client sketch:
+
+```js
+async function visualize(code, lang, container) {
+  let res;
+  try {
+    res = await fetch("http://127.0.0.1:8930/trace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, lang }),   // lang: ".py", ".js", ".ts", ...
+    });
+  } catch {
+    return; // codeviz isn't running — tell the user to run `codeviz api`
+  }
+  const html = await res.text();               // the self-contained viewer page
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("sandbox", "allow-scripts");
+  iframe.srcdoc = html;
+  container.appendChild(iframe);
+}
+```
+
+Mixed content: a page served over https may be blocked from calling the
+`http://127.0.0.1` API. Serve the embedding app over http (or localhost) to avoid
+this.
+
+## In-browser via Pyodide (no process, Python-only)
+
+This path produces a visualization entirely client-side, with no server
+round-trip, but only for Python (see the limitation at the end).
 
 ## Get the assets
 

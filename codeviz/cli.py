@@ -9,7 +9,7 @@ import webbrowser
 from . import backends
 from .core import build_page, trace_code, UnsupportedLanguage
 from .render import render_html
-from .server import serve
+from .server import serve, serve_api
 
 
 _STATE_MARK = {"ready": "[ ready ]", "build": "[ build ]", "unavailable": "[   x   ]"}
@@ -202,6 +202,15 @@ def _cmd_web_assets(args) -> int:
     return 0
 
 
+def _cmd_api(args) -> int:
+    """Start the on-demand trace API (for embedding, e.g. the warmups web app).
+
+    Long-running: serves POST /trace and GET /health until Ctrl+C. See serve_api.
+    """
+    serve_api(args.port, open_browser=args.open)
+    return 0
+
+
 def _output_path(args, source) -> str:
     """Where to write the HTML. With -o, exactly there. Otherwise a temp dir
     (so codeviz never litters your source folders); the path is printed, and
@@ -267,7 +276,8 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="subcommands: langs (list languages + readiness) · doctor (audit "
                "env + fixes) · setup <c|cpp|java|asm> (pre-fetch an image) · "
                "install-extension (install the VS Code extension) · web-assets "
-               "<outdir> (dump Python-in-browser embed assets).",
+               "<outdir> (dump Python-in-browser embed assets) · api [--port] "
+               "(on-demand trace HTTP API for embedding).",
     )
     p.add_argument("file", nargs="?", help="source file to visualize")
     p.add_argument("--code", help="inline source instead of a file")
@@ -298,6 +308,11 @@ def main(argv=None) -> int:
         sp = argparse.ArgumentParser(prog="codeviz web-assets")
         sp.add_argument("outdir", help="directory to write the browser-embed assets into")
         return _cmd_web_assets(sp.parse_args(argv[1:]))
+    if argv and argv[0] == "api":
+        sp = argparse.ArgumentParser(prog="codeviz api")
+        sp.add_argument("--port", type=int, default=8930, help="port to listen on (default 8930)")
+        sp.add_argument("--open", action="store_true", help="open a browser at /health")
+        return _cmd_api(sp.parse_args(argv[1:]))
     args = build_parser().parse_args(argv)
     return _cmd_default(args)
 
