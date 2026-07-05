@@ -122,6 +122,86 @@ def _cmd_install_extension(args) -> int:
     return rc
 
 
+_WEB_ASSETS_NOTICE = """\
+codeviz web assets — attribution
+================================
+
+These files let you run the Python visualizer in a browser (e.g. via Pyodide).
+
+  viewer_template.html   — renderer/UI. MIT, Copyright (c) 2026 manzoid.
+  pg_logger.py           — Python tracer.
+  pg_encoder.py          — heap encoder.
+
+pg_logger.py and pg_encoder.py are from Online Python Tutor
+(https://github.com/pgbovine/OnlinePythonTutor/), Copyright (C) Philip J. Guo
+(philip@pgbovine.net), MIT License. Local modifications: removed `import imp`
+and replaced imp.new_module() with types.ModuleType() for Python 3.12+; made two
+regex literals raw strings. The OPT trace JSON format also originates from OPT.
+
+Both codeviz and Online Python Tutor are MIT-licensed. This notice and the MIT
+permission text must be included in all copies or substantial portions.
+
+MIT License
+-----------
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
+
+def _cmd_web_assets(args) -> int:
+    """Copy the Python-in-browser runtime assets into <outdir> for embedding.
+
+    Emits the three self-contained files a downstream browser app needs to run
+    the Python visualizer via Pyodide (viewer_template.html + the vendored
+    tracer/encoder) plus a NOTICE.txt with the OPT/MIT attribution. See
+    docs/EMBED.md for the embed contract. Purely additive; reads nothing back.
+    """
+    import shutil
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    sources = [
+        os.path.join(here, "viewer_template.html"),
+        os.path.join(here, "vendor", "pg_logger.py"),
+        os.path.join(here, "vendor", "pg_encoder.py"),
+    ]
+    for src in sources:
+        if not os.path.exists(src):
+            print(f"error: missing asset {src}", file=sys.stderr)
+            return 1
+
+    outdir = args.outdir
+    os.makedirs(outdir, exist_ok=True)
+    written = []
+    for src in sources:
+        dst = os.path.join(outdir, os.path.basename(src))
+        shutil.copyfile(src, dst)
+        written.append(dst)
+
+    notice = os.path.join(outdir, "NOTICE.txt")
+    with open(notice, "w", encoding="utf-8") as f:
+        f.write(_WEB_ASSETS_NOTICE)
+    written.append(notice)
+
+    print(f"wrote {len(written)} files to {outdir}:")
+    for dst in written:
+        print(f"  {os.path.basename(dst)}  ({os.path.getsize(dst)} bytes)")
+    return 0
+
+
 def _output_path(args, source) -> str:
     """Where to write the HTML. With -o, exactly there. Otherwise a temp dir
     (so codeviz never litters your source folders); the path is printed, and
@@ -186,7 +266,8 @@ def build_parser() -> argparse.ArgumentParser:
                     "Supports Python, JavaScript/TypeScript, C/C++, and Java.",
         epilog="subcommands: langs (list languages + readiness) · doctor (audit "
                "env + fixes) · setup <c|cpp|java|asm> (pre-fetch an image) · "
-               "install-extension (install the VS Code extension).",
+               "install-extension (install the VS Code extension) · web-assets "
+               "<outdir> (dump Python-in-browser embed assets).",
     )
     p.add_argument("file", nargs="?", help="source file to visualize")
     p.add_argument("--code", help="inline source instead of a file")
@@ -213,6 +294,10 @@ def main(argv=None) -> int:
         sp = argparse.ArgumentParser(prog="codeviz setup")
         sp.add_argument("lang", help="c | cpp | java")
         return _cmd_setup(sp.parse_args(argv[1:]))
+    if argv and argv[0] == "web-assets":
+        sp = argparse.ArgumentParser(prog="codeviz web-assets")
+        sp.add_argument("outdir", help="directory to write the browser-embed assets into")
+        return _cmd_web_assets(sp.parse_args(argv[1:]))
     args = build_parser().parse_args(argv)
     return _cmd_default(args)
 
