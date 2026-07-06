@@ -130,6 +130,19 @@
 const DATA = __TRACE_JSON__;
 const trace = DATA.trace;
 const LANG = DATA.lang || "python";
+
+// sessionStorage may be unavailable (e.g. embedded in a sandboxed iframe without
+// allow-same-origin). Fall back to an in-memory store so the viewer still works.
+const _store = (() => {
+  try { const s = window.sessionStorage; s.getItem("codeviz:probe"); return s; }
+  catch (e) {
+    const mem = {};
+    return {
+      getItem: (k) => (k in mem ? mem[k] : null),
+      setItem: (k, v) => { mem[k] = String(v); },
+    };
+  }
+})();
 const codeLines = DATA.code.split("\n");
 
 // ---- build code pane once ----
@@ -144,7 +157,7 @@ codeLines.forEach((text, i) => {
 });
 
 const STEP_KEY = "codeviz:step:" + location.pathname;
-let cur = Math.max(0, Math.min(trace.length - 1, +(sessionStorage.getItem(STEP_KEY) || 0)));
+let cur = Math.max(0, Math.min(trace.length - 1, +(_store.getItem(STEP_KEY) || 0)));
 const slider = document.getElementById("slider");
 slider.max = trace.length - 1;
 
@@ -362,7 +375,7 @@ function drawArrows(){
     '<path d="M0,0 L6,3 L0,6 Z" fill="#2563eb"/></marker></defs>');
 }
 
-function go(i){ cur = Math.max(0, Math.min(trace.length - 1, i)); sessionStorage.setItem(STEP_KEY, cur); draw(); }
+function go(i){ cur = Math.max(0, Math.min(trace.length - 1, i)); _store.setItem(STEP_KEY, cur); draw(); }
 document.getElementById("first").onclick = () => go(0);
 document.getElementById("prev").onclick  = () => go(cur - 1);
 document.getElementById("next").onclick  = () => go(cur + 1);
@@ -389,7 +402,7 @@ if (location.protocol.startsWith("http")) {
       const v = (await r.text()).trim();
       if (known === null) known = v;
       else if (v !== known) {
-        sessionStorage.setItem(STEP_KEY, 0);  // a save restarts at step 1
+        _store.setItem(STEP_KEY, 0);  // a save restarts at step 1
         location.reload();
       }
     } catch (e) { /* server not up yet; ignore */ }
