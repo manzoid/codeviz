@@ -27,8 +27,8 @@ import subprocess
 from . import _docker
 from .base import Availability, Backend, Execution
 
-IMAGE = "codeviz/c-cpp:2"
-GHCR = "ghcr.io/manzoid/codeviz-c-cpp:2"
+IMAGE = "codeviz/c-cpp:3"
+GHCR = "ghcr.io/manzoid/codeviz-c-cpp:3"
 
 _PKG = os.path.dirname(os.path.dirname(__file__))  # the codeviz package dir
 _BUILD_CONTEXT = os.path.join(_PKG, "docker", "c_cpp")
