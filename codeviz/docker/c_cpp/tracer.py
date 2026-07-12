@@ -291,6 +291,9 @@ def collect_frame_vars(frame, enc):
         return locals_map, order
 
     seen = set()
+    # The line currently about to execute in this frame.  A variable declared
+    # on line D is only initialized once line D has run, i.e. once cur > D.
+    cur = current_line(frame)
     # walk from innermost block outward, but stop at the function block so we
     # don't pick up globals.
     b = block
@@ -301,6 +304,18 @@ def collect_frame_vars(frame, enc):
             nm = sym.name
             if nm in seen:
                 continue
+            # Hide a local before its declaration line has executed.  Otherwise
+            # gdb happily reads the uninitialized stack bytes — and for a
+            # pointer we would follow that garbage address and show junk like
+            # "*: -456917232".  Arguments are valid from frame entry, so they
+            # are never gated.
+            if not sym.is_argument:
+                try:
+                    decl = sym.line
+                except Exception:
+                    decl = 0
+                if decl and cur and decl >= cur:
+                    continue
             try:
                 val = sym.value(frame)
             except gdb.error:
