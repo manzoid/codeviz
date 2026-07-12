@@ -31,7 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: codeviz-c-cpp, context: codeviz/docker/c_cpp, version: "2" }
+          - { name: codeviz-c-cpp, context: codeviz/docker/c_cpp, version: "3" }
           - { name: codeviz-java, context: codeviz/docker/java, version: "1" }
           - { name: codeviz-asm-x86, context: codeviz/docker/asm, version: "1" }
     steps:

@@ -52,6 +52,17 @@ def read_stdout():
         return ""
 
 
+def flush_inferior():
+    """Flush the inferior's C stdio buffers so output written since the last
+    step is visible in STDOUT_FILE right away.  Without this, a redirect to a
+    file is fully buffered, so all printf output appears in one jump at program
+    exit instead of at the step that produced it."""
+    try:
+        gdb.execute("call (int) fflush(0)", to_string=True)
+    except gdb.error:
+        pass
+
+
 # --------------------------------------------------------------------------
 # value encoding
 # --------------------------------------------------------------------------
@@ -62,6 +73,7 @@ class Encoder:
     def __init__(self):
         self.heap = {}          # str(id) -> encoded-object
         self.seen = set()       # addresses already queued/encoded
+        self.local_addrs = set()  # addresses of stack variables (their own slots)
 
     def _heap_id(self, addr):
         return str(int(addr))
@@ -158,7 +170,17 @@ class Encoder:
             pointee = val.dereference()
         except gdb.error:
             return ["JS_TOKEN", "0x%x" % addr]
-        return self._place(addr, pointee, self._strip(pointee.type))
+        pt = self._strip(pointee.type)
+        # If the pointer targets a stack variable's own storage AND that
+        # variable is a scalar, don't invent a separate heap cell for it: point
+        # the REF straight at the variable's slot (the renderer keys frame slots
+        # by address). This removes the old "x is shown twice" duplication —
+        # once inline in the frame, once as an aliased heap box.
+        is_scalar = pt.code not in (
+            gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION, gdb.TYPE_CODE_ARRAY)
+        if is_scalar and int(addr) in self.local_addrs:
+            return ["REF", int(addr)]
+        return self._place(addr, pointee, pt)
 
     # -- arrays ----------------------------------------------------------
     def _encode_array_ref(self, val, t):
@@ -224,7 +246,7 @@ class Encoder:
             return self._encode_struct_inline(val, t)
         # a pointer pointed at a scalar (e.g. int*): wrap the scalar so it is a
         # visible heap cell that other pointers can alias.
-        return ["INSTANCE", scalar_type_name(t), ["*", self._encode(val)]]
+        return ["INSTANCE", scalar_type_name(t), ["value", self._encode(val)]]
 
 
 def scalar_type_name(t):
@@ -277,18 +299,53 @@ def frame_func_name(frame):
     return name
 
 
-def collect_frame_vars(frame, enc):
-    """Return (encoded_locals dict, ordered_varnames list) for one frame.
+def collect_local_addrs(frame):
+    """Return {name: int address} for the visible-or-not locals of one frame.
 
-    Walks the frame's block (and enclosing lexical blocks within the same
-    function) gathering SYMBOL_LOC variables and arguments.
+    Used in a pre-pass so the encoder knows which addresses are stack-variable
+    slots (a pointer into one should reference the slot, not a fresh heap box).
     """
-    locals_map = {}
-    order = []
+    out = {}
     try:
         block = frame.block()
     except RuntimeError:
-        return locals_map, order
+        return out
+    seen = set()
+    b = block
+    while b is not None:
+        for sym in b:
+            if not (sym.is_variable or sym.is_argument):
+                continue
+            nm = sym.name
+            if nm in seen:
+                continue
+            seen.add(nm)
+            try:
+                a = sym.value(frame).address
+                if a is not None:
+                    out[nm] = int(a)
+            except gdb.error:
+                continue
+        if b.function is not None:
+            break
+        b = b.superblock
+    return out
+
+
+def collect_frame_vars(frame, enc):
+    """Return (encoded_locals dict, ordered_varnames list, addr_map) for a frame.
+
+    Walks the frame's block (and enclosing lexical blocks within the same
+    function) gathering SYMBOL_LOC variables and arguments.  addr_map holds each
+    visible variable's own address so the renderer can key its slot.
+    """
+    locals_map = {}
+    order = []
+    addr_map = {}
+    try:
+        block = frame.block()
+    except RuntimeError:
+        return locals_map, order, addr_map
 
     seen = set()
     # The line currently about to execute in this frame.  A variable declared
@@ -323,10 +380,16 @@ def collect_frame_vars(frame, enc):
             seen.add(nm)
             order.append(nm)
             locals_map[nm] = enc.encode(val)
+            try:
+                a = val.address
+                if a is not None:
+                    addr_map[nm] = int(a)
+            except gdb.error:
+                pass
         if b.function is not None:
             break
         b = b.superblock
-    return locals_map, order
+    return locals_map, order, addr_map
 
 
 def collect_globals(enc):
@@ -416,13 +479,20 @@ def build_step(event="step_line", exception_msg=None):
     bottom = uframes[-1]
     above = uframes[:-1]  # frames above main (callees), newest first
 
+    # Pre-pass: learn the addresses of every stack variable BEFORE encoding, so
+    # a pointer into a stack scalar can reference that variable's own slot
+    # instead of spawning a duplicate heap box.  Must run before collect_globals
+    # (which may encode pointers).
+    for fr in uframes:
+        enc.local_addrs.update(collect_local_addrs(fr).values())
+
     # globals = file-scope globals + main's locals
     gmap, gorder = collect_globals(enc)
     try:
         gdb.selected_frame()  # ensure a frame is selected for value reads
     except gdb.error:
         pass
-    main_locals, main_order = collect_frame_vars(bottom, enc)
+    main_locals, main_order, main_addrs = collect_frame_vars(bottom, enc)
     for nm in main_order:
         if nm not in gmap:
             gorder.append(nm)
@@ -437,7 +507,7 @@ def build_step(event="step_line", exception_msg=None):
     # Build a frame for every user frame ABOVE main (callees).  These are the
     # ones drawn in the stack panel.
     for i, fr in enumerate(above):
-        fl, forder = collect_frame_vars(fr, enc)
+        fl, forder, faddrs = collect_frame_vars(fr, enc)
         stack_to_render.append({
             "func_name": frame_func_name(fr),
             "is_highlighted": i == 0,
@@ -448,6 +518,7 @@ def build_step(event="step_line", exception_msg=None):
             "frame_id": len(above) - i,
             "encoded_locals": fl,
             "ordered_varnames": forder,
+            "var_addrs": faddrs,
         })
 
     func_name = frame_func_name(top) if above else "<module>"
@@ -455,12 +526,14 @@ def build_step(event="step_line", exception_msg=None):
     if top is bottom:
         func_name = "<module>"
 
+    flush_inferior()  # make output written since the last step visible now
     step = {
         "event": event,
         "line": line,
         "func_name": func_name,
         "globals": gmap,
         "ordered_globals": gorder,
+        "global_addrs": main_addrs,
         "stack_to_render": stack_to_render,
         "heap": enc.heap,
         "stdout": read_stdout(),

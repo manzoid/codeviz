@@ -52,6 +52,7 @@
               font: 11px "SF Mono", Menlo, monospace; line-height: 12px; }
   #addrtoggle.active { background: var(--ref); color: #fff; border-color: var(--ref); }
   .obj .otype .oaddr { color: var(--ref); font-family: "SF Mono", Menlo, monospace; }
+  .var .slot-addr { color: var(--ref); font: 11px "SF Mono", Menlo, monospace; margin-left: 10px; }
   .obj { border: 1px solid var(--obj-border); border-radius: 8px; margin-bottom: 12px; background: var(--obj-bg);
          display: inline-block; min-width: 60px; }
   .obj.flash { box-shadow: 0 0 0 3px rgba(37,99,235,.35); }
@@ -172,12 +173,19 @@ slider.max = trace.length - 1;
 // (0x100, 0x108, …) so a pointer's value is readable AND reproducible — which
 // matters if these ever drive predict-style exercises.
 const ADDR_MAP = (() => {
-  const addrs = new Set();
-  for (const step of trace) for (const k of Object.keys(step.heap || {})) addrs.add(k);
-  const sorted = [...addrs].map(Number).sort((a, b) => a - b);
+  // Collect every address that appears (stack-variable slots + heap objects) in
+  // first-seen order, so synthetic addresses run in roughly declaration order.
+  const order = [];
+  const seen = new Set();
+  const add = (a) => { if (a == null) return; const s = String(a); if (!seen.has(s)) { seen.add(s); order.push(s); } };
+  for (const step of trace) {
+    if (step.global_addrs) for (const k in step.global_addrs) add(step.global_addrs[k]);
+    for (const fr of step.stack_to_render || []) if (fr.var_addrs) for (const k in fr.var_addrs) add(fr.var_addrs[k]);
+    for (const k of Object.keys(step.heap || {})) add(k);
+  }
   const m = new Map();
   let base = 0x100;
-  for (const a of sorted) { m.set(String(a), "0x" + base.toString(16)); base += 8; }
+  for (const s of order) { m.set(s, "0x" + base.toString(16)); base += 8; }
   return m;
 })();
 function addrOf(id){ return ADDR_MAP.get(String(id)) || null; }
@@ -265,7 +273,7 @@ function renderObject(id, enc){
   return box;
 }
 
-function renderFrame(title, names, locals, highlight){
+function renderFrame(title, names, locals, highlight, addrs){
   const f = document.createElement("div");
   f.className = "frame" + (highlight ? " highlight" : "");
   const h = document.createElement("div"); h.className = "fname"; h.textContent = title; f.appendChild(h);
@@ -273,7 +281,19 @@ function renderFrame(title, names, locals, highlight){
   names.forEach(n => {
     const row = document.createElement("div"); row.className = "var";
     const nm = document.createElement("div"); nm.className = "vname"; nm.textContent = n; row.appendChild(nm);
-    const vv = document.createElement("div"); vv.appendChild(valNode(locals[n])); row.appendChild(vv);
+    const vv = document.createElement("div");
+    // A scalar's slot IS its storage: key it by address so a pointer's REF
+    // arrow lands here (no duplicate heap box), and show the address itself.
+    // Skip when the slot is itself a REF to a heap object (array/struct): the
+    // heap box already owns "obj-<addr>", so keying the slot too would collide.
+    const raw = addrs && addrs[n];
+    const scalarSlot = raw != null && !isRef(locals[n]);
+    if (scalarSlot) vv.id = "obj-" + raw;
+    vv.appendChild(valNode(locals[n]));
+    if (SHOW_ADDR && scalarSlot && addrOf(raw)){
+      const a = document.createElement("span"); a.className = "slot-addr"; a.textContent = addrOf(raw); vv.appendChild(a);
+    }
+    row.appendChild(vv);
     f.appendChild(row);
   });
   return f;
@@ -360,9 +380,9 @@ function draw(){
 
   // frames
   const framesEl = document.getElementById("frames"); framesEl.innerHTML = "";
-  framesEl.appendChild(renderFrame("Global frame", step.ordered_globals, step.globals, !step.stack_to_render.length));
+  framesEl.appendChild(renderFrame("Global frame", step.ordered_globals, step.globals, !step.stack_to_render.length, step.global_addrs));
   step.stack_to_render.forEach(fr => {
-    framesEl.appendChild(renderFrame(fr.func_name, fr.ordered_varnames, fr.encoded_locals, fr.is_highlighted));
+    framesEl.appendChild(renderFrame(fr.func_name, fr.ordered_varnames, fr.encoded_locals, fr.is_highlighted, fr.var_addrs));
   });
 
   // objects (heap) — order by id for stability
